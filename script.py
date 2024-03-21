@@ -29,7 +29,8 @@ if __name__ == '__main__':
     '''
     # Prepare experiments
     N_EXPERTS = 42
-    bn_i = gum.loadBN("expert_networks/network_5.bif")
+    #bn_i = gum.loadBN("expert_networks/network_5.bif")
+    bn_i = gum.loadBN("/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif")
     my_adapter = BayesianNetwork.BayesianNetworkPyAgrum(bn_i)
     marginal_f5 = {i[0] : 0 for i in my_adapter.get_domain_of(["F5"])}
     ev_vars = {}#{"F1": "intralaminar"}
@@ -45,7 +46,8 @@ if __name__ == '__main__':
     relevance_count = {i : 0 for i in var_powerset}
     for i in range(N_EXPERTS) :
         print("Expert: ",i+1)
-        bn_i = gum.loadBN("expert_networks/network_"+str(i+1)+".bif")
+        #bn_i = gum.loadBN("expert_networks/network_"+str(i+1)+".bif")
+        bn_i = gum.loadBN("/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_"+str(i+1)+".bif")
         my_adapter = BayesianNetwork.BayesianNetworkPyAgrum(bn_i)
         map = my_adapter.maximum_a_posteriori(evidence=ev_vars, target=target)
         print(map)
@@ -64,7 +66,8 @@ if __name__ == '__main__':
     relevances = pd.DataFrame(columns=var_powerset, index=list(range(N_EXPERTS)), dtype=float)
     for i in range(N_EXPERTS):
         print("Expert: ", i + 1)
-        bn_i = gum.loadBN("expert_networks/network_" + str(i + 1) + ".bif")
+        #bn_i = gum.loadBN("expert_networks/network_" + str(i + 1) + ".bif")
+        bn_i = gum.loadBN("/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_" + str(i + 1) + ".bif")
         my_adapter = BayesianNetwork.BayesianNetworkPyAgrum(bn_i)
         map = my_adapter.maximum_a_posteriori(evidence=ev_vars, target=target)
         for j in var_powerset:
