@@ -93,11 +93,11 @@ if __name__ == '__main__':
     G = nx.DiGraph()
 
     # Add nodes and edges to the graph
-    for node in bn_i.nodes():
+    for node in bn_i.names():
         G.add_node(node)
 
-    for edge in bn_i.edges():
-        G.add_edge(*edge)
+    for edge in bn_i.arcs():
+        G.add_edge(str(edge[0]), str(edge[1]))
 
     # Convert the graph to a JSON format to use with D3.js
     data = nx.node_link_data(G)
