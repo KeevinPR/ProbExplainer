@@ -4,7 +4,9 @@ from probExplainer.algorithms import defeater
 import pyAgrum as gum
 import pandas as pd
 #import pyAgrum.lib.notebook as gnb
-
+#This python library will be use to transform the graph into data that d3.js will be able to use
+import networkx as nx
+import json
 
 if __name__ == '__main__':
     '''
@@ -28,7 +30,7 @@ if __name__ == '__main__':
     #gnb.flow.display()
     '''
     # Prepare experiments
-    N_EXPERTS = 42
+    N_EXPERTS = 2
     #bn_i = gum.loadBN("expert_networks/network_5.bif")
     bn_i = gum.loadBN("/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif")
     my_adapter = BayesianNetwork.BayesianNetworkPyAgrum(bn_i)
