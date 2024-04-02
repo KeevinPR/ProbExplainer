@@ -88,3 +88,20 @@ if __name__ == '__main__':
 
     print("EXPERIMENT 2 results")
     print(relevances.describe())
+    
+    #Creating and transforming the bn into a graph that can be used by d3.js
+    G = nx.DiGraph()
+
+    # Add nodes and edges to the graph
+    for node in bn_i.nodes():
+        G.add_node(node)
+
+    for edge in bn_i.edges():
+        G.add_edge(*edge)
+
+    # Convert the graph to a JSON format to use with D3.js
+    data = nx.node_link_data(G)
+
+    # Write the data to a JSON file
+    with open('graph_final.json', 'w') as f:
+        json.dump(data, f)
