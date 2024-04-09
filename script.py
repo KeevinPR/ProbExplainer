@@ -7,7 +7,7 @@ import pandas as pd
 #This python library will be use to transform the graph into data that d3.js will be able to use
 import networkx as nx
 import json
-
+from networkx.readwrite import json_graph
 if __name__ == '__main__':
     '''
     bn = gum.loadBN("insurance.bif")
