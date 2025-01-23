@@ -18,6 +18,7 @@ logger.setLevel(logging.INFO)
 # ---------- (1) CREATE DASH APP ---------- #
 app = dash.Dash(
     __name__,
+    requests_pathname_prefix='/Evidence/ProbExplainerDash/',
     suppress_callback_exceptions=True
 )
 
@@ -389,4 +390,4 @@ def run_action(n_clicks, action, stored_network,
 
 # ---------- (5) RUN THE SERVER ---------- #
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=8050)
+    app.run_server(debug=True, host='0.0.0.0', port=8054)
