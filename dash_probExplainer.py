@@ -58,7 +58,8 @@ app.layout = html.Div([
             options=[
                 {'label': 'Compute Posterior', 'value': 'posterior'},
                 {'label': 'Map Independence', 'value': 'map_independence'},
-                {'label': 'Get Defeaters (Not Implemented)', 'value': 'defeaters'}
+                # Changed label from "Get Defeaters (Not Implemented)" to "Get Defeaters"
+                {'label': 'Get Defeaters', 'value': 'defeaters'}
             ],
             value='posterior',  # Default action
             style={'width': '50%', 'margin': '0 auto'}
@@ -301,9 +302,7 @@ def run_action(n_clicks, action, stored_network,
             return html.Div("Please select at least one target variable for Compute Posterior.", style={'color': 'red'})
         try:
             posterior_array = bn_adapter.compute_posterior(evidence_dict, target_vars)
-            # The shape is [#statesTar1, #statesTar2, ...]
-            # Convert to a simple text or table. Here is a simple text example:
-            domain = bn_adapter.get_domain_of(target_vars)  # list of tuples with possible states
+            domain = bn_adapter.get_domain_of(target_vars)
             probs_list = posterior_array.flatten().tolist()
 
             results_str = []
@@ -324,14 +323,8 @@ def run_action(n_clicks, action, stored_network,
             return html.Div("Please select at least one variable in R for Map Independence.", style={'color': 'red'})
 
         try:
-            # 1) Compute MAP for the target_vars given the evidence
-            #    maximum_a_posteriori() returns [(assignment_dict), probability]
             map_result = bn_adapter.maximum_a_posteriori(evidence_dict, target_vars)
-            # map_result is something like [({var1: state1, var2: state2, ...}, prob_value)]
             map_dict, map_prob = map_result[0], map_result[1]
-
-            # 2) Call map_independence(r_vars, evidence_dict, map_dict)
-            #    Returns True if INDEPENDENT (MAP does not change), False if it does change.
             independence_bool = bn_adapter.map_independence(r_vars, evidence_dict, map_dict)
 
             if independence_bool:
@@ -350,11 +343,48 @@ def run_action(n_clicks, action, stored_network,
             return html.Div(f"Error in map_independence: {e}", style={'color': 'red'})
 
     elif action == 'defeaters':
-        # Not implemented yet
-        return html.Div("The 'Get Defeaters' action is not implemented yet.", style={'color': 'orange'})
+        # *** Implemented now ***
+        if not target_vars:
+            return html.Div("Please select at least one target variable for Get Defeaters.", style={'color': 'red'})
 
-    # If for some reason no action matches
-    return html.Div("Unknown action.", style={'color': 'red'})
+        # Import your get_defeaters function
+        from probExplainer.algorithms.defeater import get_defeaters
+
+        try:
+            # Hardcoded defaults: depth=∞, evaluate_singletons=True
+            relevant_sets, irrelevant_sets = get_defeaters(
+                model=bn_adapter,
+                evidence=evidence_dict,
+                target=target_vars,
+                depth=float('inf'),
+                evaluate_singletons=True
+            )
+
+            # Format results
+            if not relevant_sets:
+                relevant_str = "None"
+            else:
+                relevant_str = "\n".join(map(str, relevant_sets))
+            if not irrelevant_sets:
+                irrelevant_str = "None"
+            else:
+                irrelevant_str = "\n".join(map(str, irrelevant_sets))
+
+            return html.Div([
+                html.H4("Get Defeaters Results"),
+                html.P("Relevant sets (these can alter the MAP assignment):"),
+                html.Pre(relevant_str),
+                html.P("Irrelevant sets (cannot alter MAP):"),
+                html.Pre(irrelevant_str)
+            ], style={'whiteSpace':'pre-wrap'})
+
+        except ImplausibleEvidenceException:
+            return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
+        except Exception as e:
+            return html.Div(f"Error in get_defeaters: {e}", style={'color': 'red'})
+
+    else:
+        return html.Div("Unknown action.", style={'color': 'red'})
 
 
 # ---------- (5) RUN THE SERVER ---------- #
