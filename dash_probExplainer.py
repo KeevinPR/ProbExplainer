@@ -28,9 +28,13 @@ reader = BIFReader('/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdja
 default_model_pgmpy = reader.get_model()
 
 # ---------- (3) APP LAYOUT ---------- #
-app.layout = html.Div([
-    html.H1("Bayesian Network App - ProbExplainer Demo", style={'textAlign': 'center'}),
-    html.Hr(),
+app.layout = dcc.Loading(
+    id="global-spinner",
+    overlay_style={"visibility":"visible", "filter": "blur(1px)"},
+    type="circle",        # You can choose "circle", "dot", "default", etc.
+    fullscreen=False,      # This ensures it covers the entire page
+    children=html.Div([
+    html.H1("Bayesian Network ProbExplainer ", style={'textAlign': 'center'}),
 
     # Section to upload .bif file or use default network
     html.Div([
@@ -122,6 +126,7 @@ app.layout = html.Div([
     # dcc.Store to keep the chosen network
     dcc.Store(id='stored-network'),
 ])
+)
 
 # ---------- (4) CALLBACKS ---------- #
 
