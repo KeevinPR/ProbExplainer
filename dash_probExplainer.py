@@ -22,6 +22,8 @@ app = dash.Dash(
     suppress_callback_exceptions=True
 )
 
+server = app.server
+
 # ---------- (2) LOAD DEFAULT BAYESIAN NETWORK (network_5.bif) WITH PGMPY ---------- #
 # Note: You can replace 'network_5.bif' with the path to your default network if desired.
 reader = BIFReader('/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif')
