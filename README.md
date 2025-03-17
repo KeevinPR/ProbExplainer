@@ -6,7 +6,7 @@ BayesInterpret is a computational project focused on creating interactive dashbo
 
 This work is based on ideas and research from the Computational Intelligence Group (CIG) and integrates interface design with machine learning tools to enhance interpretability in a simple and practical way. I'll be using Dash for the new interface.
 
-[<img src="https://cig.fi.upm.es/wp-content/uploads/2023/11/cropped-logo_CIG.png" alt="CIG UPM" width="50">](https://cig.fi.upm.es)
+[<img src="https://cig.fi.upm.es/wp-content/uploads/2023/11/cropped-logo_CIG.png" alt="CIG UPM" width="50">](https://cig.fi.upm.es) 
 
 
 # ProbExplainer
