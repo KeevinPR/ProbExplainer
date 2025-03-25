@@ -1,5 +1,6 @@
 import dash
 from dash import dcc, html, Input, Output, State, ALL
+import dash_bootstrap_components as dbc
 import base64
 import io
 import json
@@ -18,6 +19,7 @@ logger.setLevel(logging.INFO)
 # ---------- (1) CREATE DASH APP ---------- #
 app = dash.Dash(
     __name__,
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
     requests_pathname_prefix='/Evidence/ProbExplainerDash/',
     suppress_callback_exceptions=True
 )
