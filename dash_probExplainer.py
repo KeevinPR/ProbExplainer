@@ -157,17 +157,21 @@ app.layout = html.Div([
         html.Hr(),
 
         # Evidence selection
-        html.Div([
-            html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
-            dcc.Dropdown(
-                id='evidence-vars-dropdown',
-                options=[{'label': var, 'value': var} for var in default_model_pgmpy.nodes()],
-                multi=True,
-                placeholder="Select evidence variables",
-                style={'width': '50%', 'margin': '0 auto'}
-            ),
-            html.Div(id='evidence-values-container')
-        ], style={'marginBottom': '20px'}),
+        html.Div(
+            id='evidence-section',
+            style={'marginBottom': '20px', 'display': 'none'},  # hidden by default
+            children=[
+                html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
+                dcc.Dropdown(
+                    id='evidence-vars-dropdown',
+                    options=[],
+                    multi=True,
+                    placeholder="Select evidence variables",
+                    style={'width': '50%', 'margin': '0 auto'}
+                ),
+                html.Div(id='evidence-values-container')
+            ]
+        ),
 
         html.Hr(),
 
