@@ -41,6 +41,69 @@ app.layout = html.Div([
         children=html.Div([
         html.H1("Bayesian Network ProbExplainer ", style={'textAlign': 'center'}),
 
+
+
+        ########################################################
+            # Info text
+            ########################################################
+            html.Div(
+                className="link-bar",
+                style={
+                    "textAlign": "center",
+                    "marginBottom": "20px"
+                },
+                children=[
+                    html.A(
+                        children=[
+                            html.Img(
+                                src="https://cig.fi.upm.es/wp-content/uploads/github.png",
+                                style={"height": "24px", "marginRight": "8px"}
+                            ),
+                            "Original GitHub"
+                        ],
+                        href="https://github.com/Enrique-Val/ProbExplainer",
+                        target="_blank",
+                        className="btn btn-outline-info me-2"
+                    ),
+                    html.A(
+                        children=[
+                            html.Img(
+                                src="https://cig.fi.upm.es/wp-content/uploads/2023/11/cropped-logo_CIG.png",
+                                style={"height": "24px", "marginRight": "8px"}
+                            ),
+                            "Paper PDF"
+                        ],
+                        href="https://cig.fi.upm.es/wp-content/uploads/2024/01/Efficient-search-for-relevance-explanations-using-MAP-independence-in-Bayesian-networks.pdf",
+                        target="_blank",
+                        className="btn btn-outline-primary me-2"
+                    ),
+                    html.A(
+                        children=[
+                            html.Img(
+                                src="https://cig.fi.upm.es/wp-content/uploads/github.png",
+                                style={"height": "24px", "marginRight": "8px"}
+                            ),
+                            "Dash Adapted GitHub"
+                        ],
+                        href="https://github.com/KeevinPR/ProbExplainer",
+                        target="_blank",
+                        className="btn btn-outline-info me-2"
+                    ),
+                ]
+            ),
+            ########################################################
+            # Short explanatory text
+            ########################################################
+            html.Div(
+                [
+                    html.P(
+                        "Library to adapt and explain probabilistic models and specially aimed for Bayesian networks.",
+                        style={"textAlign": "center", "maxWidth": "800px", "margin": "0 auto"}
+                    )
+                ],
+                style={"marginBottom": "20px"}
+            ),
+
         # Section to upload .bif file or use default network
         html.Div([
             html.H3("Upload a .bif File or Use Default Network (network_5.bif)", style={'textAlign': 'center'}),
