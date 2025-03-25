@@ -103,23 +103,48 @@ app.layout = html.Div([
                 ],
                 style={"marginBottom": "20px"}
             ),
+            ########################################################
+            # (A) Data upload
+            ########################################################
+            html.Div(className="card", children=[
+                html.H3("1. Upload Dataset" ,style={'textAlign': 'center'}),
 
-        # Section to upload .bif file or use default network
-        html.Div([
-            html.H3("Upload a .bif File or Use Default Network (network_5.bif)", style={'textAlign': 'center'}),
-            dcc.Upload(
-                id='upload-bif',
-                children=html.Button('Upload .bif File'),
-                style={'textAlign': 'center'}
-            ),
-            html.Br(),
-            dcc.Checklist(
-                id='use-default-network',
-                options=[{'label': ' Use Default Network (network_5.bif)', 'value': 'default'}],
-                value=['default'],  # By default uses 'network_5.bif'
-                style={'textAlign': 'center'}
-            ),
-        ], style={'textAlign': 'center'}),
+                # Container "card"
+                    html.Div([
+                        # Top part with icon and text
+                        html.Div([
+                            html.Img(
+                                src="https://img.icons8.com/ios-glyphs/40/cloud--v1.png",  
+                                className="upload-icon"
+                            ),
+                            html.Div("Drag and drop or select a CSV file", className="upload-text")
+                        ]),
+                        
+                        # Upload component
+                        dcc.Upload(
+                            id='upload-data',
+                            children=html.Div([], style={'display': 'none'}),
+                            className="upload-dropzone",
+                            multiple=False
+                        ),
+                    ], className="upload-card"),
+
+                # Use default dataset + help icon
+                html.Div([
+                    dcc.Checklist(
+                        id='use-default-network',
+                        options=[{'label': 'Use the default dataset', 'value': 'default'}],
+                        value=[],
+                        style={'display': 'inline-block', 'textAlign': 'center', 'marginTop': '10px'}
+                    ),
+                    dbc.Button(
+                        html.I(className="fa fa-question-circle"),
+                        id="help-button-default-dataset",
+                        color="link",
+                        style={"display": "inline-block", "marginLeft": "8px"}
+                    ),
+                ], style={'textAlign': 'center'}),
+            ]),
 
         html.Hr(),
 
@@ -198,14 +223,37 @@ app.layout = html.Div([
 ])
 
 # ---------- (4) CALLBACKS ---------- #
+# NEW Callback: Use default dataset -> sets 'upload-data.contents' (no ID changes!)
+@app.callback(
+    Output('upload-data', 'contents'),
+    Input('use-default-network', 'value'),
+    prevent_initial_call=True
+)
+def use_default_dataset(value):
+    """
+    If 'default' is checked, read your local 'carwithnames.data' file,
+    encode as base64, and set upload-data.contents. This triggers
+    the existing 'update_predictor_table' callback automatically.
+    """
+    if 'default' in value:
+        default_file = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/Counterfactuals/carwithnames.data'  # Adjust path as needed
+        try:
+            with open(default_file, 'rb') as f:
+                raw = f.read()
+            b64 = base64.b64encode(raw).decode()
+            return f"data:text/csv;base64,{b64}"
+        except Exception as e:
+            print(f"Error reading default dataset: {e}")
+            return dash.no_update
+    return dash.no_update
 
 ############################################
 # Store the chosen network (default or uploaded)
 ############################################
 @app.callback(
     Output('stored-network', 'data'),
-    Input('upload-bif', 'contents'),
-    State('upload-bif', 'filename'),
+    Input('upload-data', 'contents'),
+    State('upload-data', 'filename'),
     Input('use-default-network', 'value')
 )
 def load_network(contents, filename, use_default_value):
