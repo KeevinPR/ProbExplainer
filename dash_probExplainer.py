@@ -160,10 +160,8 @@ app.layout = html.Div([
                 ], style={'textAlign': 'center'}),
             ]),
 
-            html.Hr(),
-
             # Section to select action
-            html.Div([
+            html.Div(className="card", children=[
                 html.H3("Select an Action to Perform", style={'textAlign': 'center'}),
                 dcc.Dropdown(
                     id='action-dropdown',
@@ -177,10 +175,8 @@ app.layout = html.Div([
                 )
             ]),
 
-            html.Hr(),
-
             # Evidence selection
-            html.Div([
+            html.Div(className="card", children=[
                 html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
                 dcc.Dropdown(
                     id='evidence-vars-dropdown',
@@ -192,10 +188,8 @@ app.layout = html.Div([
                 html.Div(id='evidence-values-container')
             ], style={'marginBottom': '20px'}),
 
-            html.Hr(),
-
             # Target variables
-            html.Div([
+            html.Div(className="card", children=[
                 html.H3("Select Target Variables", style={'textAlign': 'center'}),
                 dcc.Dropdown(
                     id='target-vars-dropdown',
@@ -206,10 +200,8 @@ app.layout = html.Div([
                 )
             ], style={'marginBottom': '20px'}),
 
-            html.Hr(),
-
             # Set R (only needed for map_independence)
-            html.Div([
+            html.Div(className="card", children=[
                 html.H3("Select Set R (only for Map Independence)", style={'textAlign': 'center'}),
                 dcc.Dropdown(
                     id='r-vars-dropdown',
@@ -219,8 +211,6 @@ app.layout = html.Div([
                     style={'width': '50%', 'margin': '0 auto'}
                 )
             ], style={'marginBottom': '20px'}),
-
-            html.Hr(),
 
             # Run button
             html.Div([

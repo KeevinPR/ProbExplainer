@@ -128,12 +128,12 @@ hr {
     margin: 1.5rem 0;          /* Añade espacio vertical */
     opacity: 0.6;              /* Ajusta la transparencia si quieres */
   }
-
+  
 
 
 
   /* Container (card) for the upload section */
-  .upload-card {
+.upload-card {
     width: 25%; /* Adjust according to how small you want it (25% width) */
     margin: 20px auto;
     padding: 10px;
