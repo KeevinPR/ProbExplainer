@@ -2,14 +2,16 @@ import dash
 from dash import dcc, html, Input, Output, State, ALL
 import dash_bootstrap_components as dbc
 import base64
-import io
 import json
 import logging
 import warnings
 from dash.exceptions import PreventUpdate
 
-# Example: using pgmpy to read a .bif and display nodes/states (for demonstration purposes)
 from pgmpy.readwrite import BIFReader
+
+import pyAgrum as gum
+import os
+import tempfile
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO)
@@ -26,23 +28,35 @@ app = dash.Dash(
 
 server = app.server
 
-# ---------- (2) LOAD DEFAULT BAYESIAN NETWORK (network_5.bif) WITH PGMPY ---------- #
-# Note: You can replace 'network_5.bif' with the path to your default network if desired.
-reader = BIFReader('/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif')
-default_model_pgmpy = reader.get_model()
+
+# ---------- (2) HELPER FUNCTION FOR pyAgrum PARSING FROM STRING ---------- #
+def loadBNfromMemory(bif_string):
+    """
+    Workaround for pyAgrum versions that do NOT have loadBNFromString.
+    We write 'bif_string' into a temp .bif file, then load it.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".bif", delete=False, mode='w') as tmp:
+        tmp_name = tmp.name
+        tmp.write(bif_string)
+    try:
+        bn = gum.loadBN(tmp_name)
+    finally:
+        # Clean up the temp file
+        os.remove(tmp_name)
+    return bn
+
 
 # ---------- (3) APP LAYOUT ---------- #
 app.layout = html.Div([
     dcc.Loading(
         id="global-spinner",
-        overlay_style={"visibility":"visible", "filter": "blur(1px)"},
-        type="circle",        # You can choose "circle", "dot", "default", etc.
-        fullscreen=False,      # This ensures it covers the entire page
+        overlay_style={"visibility": "visible", "filter": "blur(1px)"},
+        type="circle",
+        fullscreen=False,
         children=html.Div([
-        html.H1("Bayesian Network ProbExplainer ", style={'textAlign': 'center'}),
+            html.H1("Bayesian Network ProbExplainer ", style={'textAlign': 'center'}),
 
-
-        ########################################################
+            ########################################################
             # Info text
             ########################################################
             html.Div(
@@ -102,31 +116,32 @@ app.layout = html.Div([
                 ],
                 style={"marginBottom": "20px"}
             ),
+
             ########################################################
             # (A) Data upload
             ########################################################
             html.Div(className="card", children=[
-                html.H3("1. Upload Dataset" ,style={'textAlign': 'center'}),
+                html.H3("1. Upload Dataset", style={'textAlign': 'center'}),
 
                 # Container "card"
+                html.Div([
+                    # Top part with icon and text
                     html.Div([
-                        # Top part with icon and text
-                        html.Div([
-                            html.Img(
-                                src="https://img.icons8.com/ios-glyphs/40/cloud--v1.png",  
-                                className="upload-icon"
-                            ),
-                            html.Div("Drag and drop or select a CSV file", className="upload-text")
-                        ]),
-                        
-                        # Upload component
-                        dcc.Upload(
-                            id='upload-data',
-                            children=html.Div([], style={'display': 'none'}),
-                            className="upload-dropzone",
-                            multiple=False
+                        html.Img(
+                            src="https://img.icons8.com/ios-glyphs/40/cloud--v1.png",
+                            className="upload-icon"
                         ),
-                    ], className="upload-card"),
+                        html.Div("Drag and drop or select a CSV/BIF file", className="upload-text")
+                    ]),
+                    
+                    # Upload component
+                    dcc.Upload(
+                        id='upload-data',
+                        children=html.Div([], style={'display': 'none'}),
+                        className="upload-dropzone",
+                        multiple=False
+                    ),
+                ], className="upload-card"),
 
                 # Use default dataset + help icon
                 html.Div([
@@ -145,84 +160,88 @@ app.layout = html.Div([
                 ], style={'textAlign': 'center'}),
             ]),
 
-        html.Hr(),
+            html.Hr(),
 
-        # Section to select action
-        html.Div([
-            html.H3("Select an Action to Perform", style={'textAlign': 'center'}),
-            dcc.Dropdown(
-                id='action-dropdown',
-                options=[
-                    {'label': 'Compute Posterior', 'value': 'posterior'},
-                    {'label': 'Map Independence', 'value': 'map_independence'},
-                    # Changed label from "Get Defeaters (Not Implemented)" to "Get Defeaters"
-                    {'label': 'Get Defeaters', 'value': 'defeaters'}
-                ],
-                value='posterior',  # Default action
-                style={'width': '50%', 'margin': '0 auto'}
-            )
-        ]),
+            # Section to select action
+            html.Div([
+                html.H3("Select an Action to Perform", style={'textAlign': 'center'}),
+                dcc.Dropdown(
+                    id='action-dropdown',
+                    options=[
+                        {'label': 'Compute Posterior', 'value': 'posterior'},
+                        {'label': 'Map Independence', 'value': 'map_independence'},
+                        {'label': 'Get Defeaters', 'value': 'defeaters'}
+                    ],
+                    value='posterior',  # Default action
+                    style={'width': '50%', 'margin': '0 auto'}
+                )
+            ]),
 
-        html.Hr(),
+            html.Hr(),
 
-        # Evidence selection
-        html.Div([
-            html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
-            dcc.Dropdown(
-                id='evidence-vars-dropdown',
-                options=[{'label': var, 'value': var} for var in default_model_pgmpy.nodes()],
-                multi=True,
-                placeholder="Select evidence variables",
-                style={'width': '50%', 'margin': '0 auto'}
-            ),
-            html.Div(id='evidence-values-container')
-        ], style={'marginBottom': '20px'}),
+            # Evidence selection
+            html.Div([
+                html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
+                dcc.Dropdown(
+                    id='evidence-vars-dropdown',
+                    options=[],  # now empty until network loaded
+                    multi=True,
+                    placeholder="Select evidence variables",
+                    style={'width': '50%', 'margin': '0 auto'}
+                ),
+                html.Div(id='evidence-values-container')
+            ], style={'marginBottom': '20px'}),
 
-        html.Hr(),
+            html.Hr(),
 
-        # Target variables
-        html.Div([
-            html.H3("Select Target Variables", style={'textAlign': 'center'}),
-            dcc.Dropdown(
-                id='target-vars-dropdown',
-                options=[],  # Will be dynamically updated
-                multi=True,
-                placeholder="Select target variables",
-                style={'width': '50%', 'margin': '0 auto'}
-            )
-        ], style={'marginBottom': '20px'}),
+            # Target variables
+            html.Div([
+                html.H3("Select Target Variables", style={'textAlign': 'center'}),
+                dcc.Dropdown(
+                    id='target-vars-dropdown',
+                    options=[],  # dynamically updated
+                    multi=True,
+                    placeholder="Select target variables",
+                    style={'width': '50%', 'margin': '0 auto'}
+                )
+            ], style={'marginBottom': '20px'}),
 
-        html.Hr(),
+            html.Hr(),
 
-        # Set R (only needed for map_independence)
-        html.Div([
-            html.H3("Select Set R (only for Map Independence)", style={'textAlign': 'center'}),
-            dcc.Dropdown(
-                id='r-vars-dropdown',
-                options=[],
-                multi=True,
-                placeholder="Select R variables",
-                style={'width': '50%', 'margin': '0 auto'}
-            )
-        ], style={'marginBottom': '20px'}),
+            # Set R (only needed for map_independence)
+            html.Div([
+                html.H3("Select Set R (only for Map Independence)", style={'textAlign': 'center'}),
+                dcc.Dropdown(
+                    id='r-vars-dropdown',
+                    options=[],
+                    multi=True,
+                    placeholder="Select R variables",
+                    style={'width': '50%', 'margin': '0 auto'}
+                )
+            ], style={'marginBottom': '20px'}),
 
-        html.Hr(),
+            html.Hr(),
 
-        # Run button
-        html.Div([
-            html.Button('Run', id='run-action-button', n_clicks=0)
-        ], style={'textAlign': 'center'}),
-        html.Br(),
-        html.Div(id='action-results', style={'textAlign': 'center'}),
+            # Run button
+            html.Div([
+                html.Button('Run', id='run-action-button', n_clicks=0)
+            ], style={'textAlign': 'center'}),
+            html.Br(),
+            html.Div(id='action-results', style={'textAlign': 'center'}),
 
-        # dcc.Store to keep the chosen network
-        dcc.Store(id='stored-network'),
-    ])
-    ) # end of dcc.Loading
+            # Store to keep the chosen network path/string
+            dcc.Store(id='stored-network'),
+
+            # Store to keep the nodes and states (so we don't parse repeatedly)
+            dcc.Store(id='stored-model-info'),
+        ])
+    )
 ])
 
+
 # ---------- (4) CALLBACKS ---------- #
-# NEW Callback: Use default dataset -> sets 'upload-data.contents' (no ID changes!)
+
+# (A) Checking the "Use default" => set 'upload-data.contents'
 @app.callback(
     Output('upload-data', 'contents'),
     Input('use-default-network', 'value'),
@@ -230,12 +249,13 @@ app.layout = html.Div([
 )
 def use_default_dataset(value):
     """
-    If 'default' is checked, read your local 'carwithnames.data' file,
-    encode as base64, and set upload-data.contents. This triggers
-    the existing 'update_predictor_table' callback automatically.
+    If 'default' is checked, read your local 'carwithnames.data' (or a default .bif) file,
+    encode as base64, set upload-data.contents, triggering parse callback.
+    
+    NOTE: If 'carwithnames.data' is NOT a BIF, parsing will fail.
     """
     if 'default' in value:
-        default_file = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/Counterfactuals/carwithnames.data'  # Adjust path as needed
+        default_file = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/Counterfactuals/carwithnames.data'
         try:
             with open(default_file, 'rb') as f:
                 raw = f.read()
@@ -246,39 +266,47 @@ def use_default_dataset(value):
             return dash.no_update
     return dash.no_update
 
-############################################
-# Store the chosen network (default or uploaded)
-############################################
+
+# (B) Store the chosen network (default or uploaded) in 'stored-network'
 @app.callback(
     Output('stored-network', 'data'),
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
     Input('use-default-network', 'value')
 )
-def load_network(contents, filename, use_default_value):
+def load_network(contents, filename, default_value):
     """
-    Internally store (in 'stored-network') the BN content.
-    - If 'default' is selected or no file is uploaded, load the default network (network_5.bif).
-    - If a .bif is uploaded, read and store it as a string.
+    Store path/string in 'stored-network'.
+    
+    - If 'default' is in default_value => use the known path to network_5.bif (or your default).
+    - If user uploads => decode the BIF string.
+    - If nothing => PreventUpdate.
     """
-    if 'default' in use_default_value or contents is None:
+    # If neither default is checked nor any file is uploaded => do nothing
+    if (not contents) and ('default' not in default_value):
+        raise PreventUpdate
+
+    # If "Use default" is checked => always override with that
+    if 'default' in default_value:
         logger.info("Using default network: network_5.bif")
         return {
             'network_name': 'network_5.bif',
             'network_type': 'path',
+            # Adjust path to your real default BIF
             'content': '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif'
         }
-    else:
+
+    # Otherwise, if user uploaded something:
+    if contents:
         logger.info(f"Attempting to load uploaded network: {filename}")
-        # Decode
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
         try:
             bif_data = decoded.decode('utf-8')
-            # Use pgmpy to verify it's a valid network
+            # Check if valid BIF with pgmpy
             reader_check = BIFReader(string=bif_data)
-            _ = reader_check.get_model()  # if this fails, an error is raised
-            logger.info(f"Valid network: {filename}")
+            _ = reader_check.get_model()  # fails if invalid
+            logger.info(f"Valid network uploaded: {filename}")
             return {
                 'network_name': filename,
                 'network_type': 'string',
@@ -288,88 +316,114 @@ def load_network(contents, filename, use_default_value):
             logger.error(f"Error loading network: {e}")
             return dash.no_update
 
-############################################
-# Update target and R variable options,
-# excluding those already chosen as evidence
-############################################
+    raise PreventUpdate
+
+
+# (C) Once 'stored-network' is set, parse it with pgmpy => store nodes/states in 'stored-model-info'
 @app.callback(
+    Output('stored-model-info', 'data'),
+    Input('stored-network', 'data')
+)
+def parse_network_and_store_info(stored_net):
+    if not stored_net:
+        raise PreventUpdate
+
+    logger.info("Parsing network with pgmpy to extract nodes/states...")
+    try:
+        if stored_net['network_type'] == 'path':
+            reader_local = BIFReader(stored_net['content'])
+        else:
+            # read from string
+            reader_local = BIFReader(string=stored_net['content'])
+
+        net = reader_local.get_model()
+        nodes_list = sorted(net.nodes())
+
+        # For each node, gather possible states:
+        states_dict = {}
+        for var in nodes_list:
+            cpd = net.get_cpds(var)
+            states_dict[var] = cpd.state_names[var]
+
+        return {
+            'nodes': nodes_list,
+            'states': states_dict
+        }
+    except Exception as e:
+        logger.error(f"Error parsing network in parse_network_and_store_info: {e}")
+        return dash.no_update
+
+
+# (D) Update Evidence/Target/R options from the stored model info
+@app.callback(
+    Output('evidence-vars-dropdown', 'options'),
     Output('target-vars-dropdown', 'options'),
     Output('r-vars-dropdown', 'options'),
-    Input('evidence-vars-dropdown', 'value'),
-    State('stored-network', 'data')
+    Input('stored-model-info', 'data')
 )
-def update_target_r_options(evidence_vars, stored_network):
-    if stored_network is None:
-        return [], []
-    try:
-        # Load the network with pgmpy just to get the list of nodes
-        if stored_network['network_type'] == 'path':
-            reader_local = BIFReader(stored_network['content'])
-            net = reader_local.get_model()
-            all_vars = net.nodes()
-        else:  # 'string'
-            reader_local = BIFReader(string=stored_network['content'])
-            net = reader_local.get_model()
-            all_vars = net.nodes()
+def update_dropdown_options(model_info):
+    if not model_info:
+        return [], [], []
+    nodes_list = model_info['nodes']
+    opts = [{'label': var, 'value': var} for var in nodes_list]
+    return opts, opts, opts
 
-        ev_vars = set(evidence_vars) if evidence_vars else set()
-        valid_vars = [v for v in all_vars if v not in ev_vars]
 
-        opts = [{'label': v, 'value': v} for v in sorted(valid_vars)]
-        return opts, opts
-    except Exception as e:
-        logger.error(f"Error updating target/R: {e}")
-        return [], []
-
-############################################
-# Generate dropdowns for evidence values
-############################################
+# (E) Generate the evidence-value dropdowns
 @app.callback(
     Output('evidence-values-container', 'children'),
     Input('evidence-vars-dropdown', 'value'),
-    State('stored-network', 'data')
+    State('stored-model-info', 'data')
 )
-def update_evidence_values(evidence_vars, stored_network):
-    if not evidence_vars:
-        return []
-    if stored_network is None:
+def update_evidence_values(evidence_vars, model_info):
+    if not evidence_vars or not model_info:
         return []
 
-    # We display the possible states for each selected evidence variable
-    # using pgmpy (just to build the UI). Later, PyAgrum will do the actual inference.
+    states_dict = model_info['states']  # var -> list_of_states
     children = []
-    try:
-        if stored_network['network_type'] == 'path':
-            reader_local = BIFReader(stored_network['content'])
-            net = reader_local.get_model()
-        else:  # 'string'
-            reader_local = BIFReader(string=stored_network['content'])
-            net = reader_local.get_model()
-
-        for var in evidence_vars:
-            var_states = net.get_cpds(var).state_names[var]
-            children.append(
-                html.Div(
-                    [
-                        html.Label(f"Value for {var}: ", style={'marginRight': '10px'}),
-                        dcc.Dropdown(
-                            id={'type': 'evidence-value-dropdown', 'index': var},
-                            options=[{'label': s, 'value': s} for s in var_states],
-                            value=var_states[0] if var_states else None,
-                            style={'width': '200px'}
-                        )
-                    ],
-                    style={'textAlign': 'center', 'marginBottom': '10px'}
-                )
+    for var in evidence_vars:
+        var_states = states_dict.get(var, [])
+        children.append(
+            html.Div(
+                [
+                    html.Label(f"Value for {var}: ", style={'marginRight': '10px'}),
+                    dcc.Dropdown(
+                        id={'type': 'evidence-value-dropdown', 'index': var},
+                        options=[{'label': s, 'value': s} for s in var_states],
+                        style={'width': '200px'}
+                    )
+                ],
+                style={'textAlign': 'center', 'marginBottom': '10px'}
             )
-        return children
-    except Exception as e:
-        logger.error(f"Error in update_evidence_values: {e}")
-        return []
+        )
+    return children
 
-############################################
-# Main callback to execute the selected action
-############################################
+
+# (F) OPTIONAL: If you want to exclude chosen evidence from target/R
+@app.callback(
+    Output('target-vars-dropdown', 'options', allow_duplicate=True),
+    Output('r-vars-dropdown', 'options', allow_duplicate=True),
+    Input('evidence-vars-dropdown', 'value'),
+    State('stored-model-info', 'data'),
+    prevent_initial_call=True
+)
+def exclude_evidence_from_target_r(evidence_vars, model_info):
+    if not model_info:
+        raise PreventUpdate
+
+    all_nodes = model_info['nodes']
+    if not evidence_vars:
+        # If no evidence chosen, all nodes valid
+        opts = [{'label': n, 'value': n} for n in all_nodes]
+        return opts, opts
+
+    ev_set = set(evidence_vars)
+    filtered = [n for n in all_nodes if n not in ev_set]
+    opts = [{'label': n, 'value': n} for n in filtered]
+    return opts, opts
+
+
+# (G) Main callback: run the chosen action
 @app.callback(
     Output('action-results', 'children'),
     Input('run-action-button', 'n_clicks'),
@@ -384,42 +438,39 @@ def update_evidence_values(evidence_vars, stored_network):
 def run_action(n_clicks, action, stored_network,
                evidence_vars, evidence_values, evidence_ids,
                target_vars, r_vars):
-    if n_clicks is None or n_clicks == 0:
+    if not n_clicks:
         raise PreventUpdate
 
     if not stored_network:
-        return html.Div("Please upload a .bif file or use the default network.", style={'color': 'red'})
+        return html.Div("No network loaded. Please upload or select the default network.", style={'color': 'red'})
 
-    # Build the evidence dictionary
+    # Build evidence dict
     evidence_dict = {}
     if evidence_vars and evidence_values and evidence_ids:
         for ev_id, val in zip(evidence_ids, evidence_values):
-            var = ev_id['index']
-            evidence_dict[var] = val
+            if val is not None:  # ignore if none
+                var = ev_id['index']
+                evidence_dict[var] = val
 
-    # --- 1) Create a PyAgrum instance via BayesianNetworkPyAgrum (ProbExplainer) --- #
-    import pyAgrum as gum
     from probExplainer.model.BayesianNetwork import BayesianNetworkPyAgrum, ImplausibleEvidenceException
 
-    # Load the network into pyAgrum
-    bn_pya = None
+    # Load BN with pyAgrum (without loadBNFromString)
     try:
         if stored_network['network_type'] == 'path':
             bn_pya = gum.loadBN(stored_network['content'])
         else:
-            bn_pya = gum.loadBNFromString(stored_network['content'])
+            # if it's a string => use our helper
+            bn_pya = loadBNfromMemory(stored_network['content'])
     except Exception as e:
-        return html.Div(f"Error loading the network in pyAgrum: {e}", style={'color': 'red'})
+        return html.Div(f"Error loading network in pyAgrum: {e}", style={'color': 'red'})
 
-    # Instantiate the ProbExplainer adapter
     try:
         bn_adapter = BayesianNetworkPyAgrum(bn_pya)
     except Exception as e:
         return html.Div(f"Error creating BayesianNetworkPyAgrum: {e}", style={'color': 'red'})
 
-    # --- 2) Perform the chosen action --- #
+    # Perform chosen action
     if action == 'posterior':
-        # Requires evidence_vars and target_vars
         if not target_vars:
             return html.Div("Please select at least one target variable for Compute Posterior.", style={'color': 'red'})
         try:
@@ -438,7 +489,6 @@ def run_action(n_clicks, action, stored_network,
             return html.Div(f"Error in compute_posterior: {e}", style={'color': 'red'})
 
     elif action == 'map_independence':
-        # Requires evidence, target_vars, and set R
         if not target_vars:
             return html.Div("Please select at least one target variable for Map Independence.", style={'color': 'red'})
         if not r_vars:
@@ -465,15 +515,11 @@ def run_action(n_clicks, action, stored_network,
             return html.Div(f"Error in map_independence: {e}", style={'color': 'red'})
 
     elif action == 'defeaters':
-        # *** Implemented now ***
         if not target_vars:
             return html.Div("Please select at least one target variable for Get Defeaters.", style={'color': 'red'})
 
-        # Import your get_defeaters function
         from probExplainer.algorithms.defeater import get_defeaters
-
         try:
-            # Hardcoded defaults: depth=∞, evaluate_singletons=True
             relevant_sets, irrelevant_sets = get_defeaters(
                 model=bn_adapter,
                 evidence=evidence_dict,
@@ -481,8 +527,6 @@ def run_action(n_clicks, action, stored_network,
                 depth=float('inf'),
                 evaluate_singletons=True
             )
-
-            # Format results
             if not relevant_sets:
                 relevant_str = "None"
             else:
@@ -498,7 +542,7 @@ def run_action(n_clicks, action, stored_network,
                 html.Pre(relevant_str),
                 html.P("Irrelevant sets (cannot alter MAP):"),
                 html.Pre(irrelevant_str)
-            ], style={'whiteSpace':'pre-wrap'})
+            ], style={'whiteSpace': 'pre-wrap'})
 
         except ImplausibleEvidenceException:
             return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
