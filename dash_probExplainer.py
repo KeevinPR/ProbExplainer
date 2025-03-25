@@ -105,36 +105,21 @@ app.layout = html.Div([
             ),
 
         # Section to upload .bif file or use default network
-        html.Div(className="card", children=[
-                html.H3("1. Upload Bayesian Network (.bif)", style={'textAlign': 'center'}),
-
-                html.Div([
-                    html.Div([
-                        html.Img(
-                            src="https://img.icons8.com/ios-glyphs/40/cloud--v1.png",
-                            className="upload-icon"
-                        ),
-                        html.Div("Drag and drop or select a .bif file", className="upload-text")
-                    ]),
-                    dcc.Upload(
-                        id='upload-bif',
-                        children=html.Div([], style={'display': 'none'}),
-                        className="upload-dropzone",
-                        multiple=False
-                    ),
-                ], className="upload-card"),
-
-                html.Div([
-                    dcc.Checklist(
-                        id='use-default-network',
-                        options=[{'label': ' Use Default Network (network_5.bif)', 'value': 'default'}],
-                        value=[],  # if you want it unchecked by default
-                        style={'display': 'inline-block', 'textAlign': 'center', 'marginTop': '10px'}
-                    ),
-                ], style={'textAlign': 'center'}),
-
-                html.Div(id='feedback-upload', style={'textAlign': 'center', 'color': 'green', 'marginTop': '10px'}),
-            ]),
+        html.Div([
+            html.H3("Upload a .bif File or Use Default Network (network_5.bif)", style={'textAlign': 'center'}),
+            dcc.Upload(
+                id='upload-bif',
+                children=html.Button('Upload .bif File'),
+                style={'textAlign': 'center'}
+            ),
+            html.Br(),
+            dcc.Checklist(
+                id='use-default-network',
+                options=[{'label': ' Use Default Network (network_5.bif)', 'value': 'default'}],
+                value=['default'],  # By default uses 'network_5.bif'
+                style={'textAlign': 'center'}
+            ),
+        ], style={'textAlign': 'center'}),
 
         html.Hr(),
 
@@ -157,39 +142,31 @@ app.layout = html.Div([
         html.Hr(),
 
         # Evidence selection
-        html.Div(
-            id='evidence-section',
-            style={'marginBottom': '20px', 'display': 'none'},  # hidden by default
-            children=[
-                html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
-                dcc.Dropdown(
-                    id='evidence-vars-dropdown',
-                    options=[],
-                    multi=True,
-                    placeholder="Select evidence variables",
-                    style={'width': '50%', 'margin': '0 auto'}
-                ),
-                html.Div(id='evidence-values-container')
-            ]
-        ),
+        html.Div([
+            html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
+            dcc.Dropdown(
+                id='evidence-vars-dropdown',
+                options=[{'label': var, 'value': var} for var in default_model_pgmpy.nodes()],
+                multi=True,
+                placeholder="Select evidence variables",
+                style={'width': '50%', 'margin': '0 auto'}
+            ),
+            html.Div(id='evidence-values-container')
+        ], style={'marginBottom': '20px'}),
 
         html.Hr(),
 
         # Target variables
-        html.Div(
-            id='target-section',
-            style={'marginBottom': '20px', 'display': 'none'},
-            children=[
-                html.H3("Select Target Variables", style={'textAlign': 'center'}),
-                dcc.Dropdown(
-                    id='target-vars-dropdown',
-                    options=[],  # Will be filled after the network is loaded
-                    multi=True,
-                    placeholder="Select target variables",
-                    style={'width': '50%', 'margin': '0 auto'}
-                )
-            ]
-        ),
+        html.Div([
+            html.H3("Select Target Variables", style={'textAlign': 'center'}),
+            dcc.Dropdown(
+                id='target-vars-dropdown',
+                options=[],  # Will be dynamically updated
+                multi=True,
+                placeholder="Select target variables",
+                style={'width': '50%', 'margin': '0 auto'}
+            )
+        ], style={'marginBottom': '20px'}),
 
         html.Hr(),
 
@@ -221,79 +198,48 @@ app.layout = html.Div([
 ])
 
 # ---------- (4) CALLBACKS ---------- #
-@app.callback(
-    Output('upload-bif', 'contents'),
-    Input('use-default-network', 'value'),
-    prevent_initial_call=True
-)
-def use_default_bif(value):
-    """
-    If 'default' is checked, read the local 'network_5.bif' file,
-    encode it in base64, and set upload-bif.contents with that data.
-    """
-    if 'default' in value:
-        default_file = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif'
-        try:
-            with open(default_file, 'rb') as f:
-                raw = f.read()
-            b64 = base64.b64encode(raw).decode()
-            # Return string with MIME type + base64
-            return f"data:application/octet-stream;base64,{b64}"
-        except Exception as e:
-            print(f"Error reading default BIF: {e}")
-            return dash.no_update
-    else:
-        # If unchecked, remove contents so that it won't keep the old default
-        return None
+
 ############################################
 # Store the chosen network (default or uploaded)
 ############################################
 @app.callback(
     Output('stored-network', 'data'),
-    Output('feedback-upload', 'children'),  # so we can show a message
     Input('upload-bif', 'contents'),
-    State('upload-bif', 'filename')
+    State('upload-bif', 'filename'),
+    Input('use-default-network', 'value')
 )
-def load_network(contents, filename):
+def load_network(contents, filename, use_default_value):
     """
-    Whenever 'upload-bif.contents' changes (due to either a user drag & drop
-    or the default checkbox), parse the .bif and store it in 'stored-network'.
-    Also produce a feedback message.
+    Internally store (in 'stored-network') the BN content.
+    - If 'default' is selected or no file is uploaded, load the default network (network_5.bif).
+    - If a .bif is uploaded, read and store it as a string.
     """
-    if contents is None:
-        # No file uploaded or default not chosen
-        raise dash.exceptions.PreventUpdate
-
-    # If we get here, we have a base64-encoded .bif
-    content_type, content_string = contents.split(',')
-    decoded = base64.b64decode(content_string)
-
-    # Distinguish "user's file" vs "default" for the feedback
-    # We'll show filename if present, otherwise "default network loaded"
-    file_label = filename or "Default network"
-
-    try:
-        from pgmpy.readwrite import BIFReader
-        # Attempt to load from the string
-        # You can pass a string to BIFReader but that typically needs a "string" parameter.
-        # We'll decode it as text:
-        bif_text = decoded.decode('utf-8')
-        reader_check = BIFReader(string=bif_text)
-        model = reader_check.get_model()
-
-        # We store something in 'stored-network'—maybe the entire .bif text or the network name
-        network_data = {
-            'network_name': file_label,
-            'network_type': 'string',
-            'content': bif_text
+    if 'default' in use_default_value or contents is None:
+        logger.info("Using default network: network_5.bif")
+        return {
+            'network_name': 'network_5.bif',
+            'network_type': 'path',
+            'content': '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif'
         }
-
-        feedback_message = f"File loaded successfully: {file_label}"
-        return network_data, feedback_message
-
-    except Exception as e:
-        print(f"Error parsing BIF file: {e}")
-        return dash.no_update, f"Error loading {file_label}: {e}"
+    else:
+        logger.info(f"Attempting to load uploaded network: {filename}")
+        # Decode
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string)
+        try:
+            bif_data = decoded.decode('utf-8')
+            # Use pgmpy to verify it's a valid network
+            reader_check = BIFReader(string=bif_data)
+            _ = reader_check.get_model()  # if this fails, an error is raised
+            logger.info(f"Valid network: {filename}")
+            return {
+                'network_name': filename,
+                'network_type': 'string',
+                'content': bif_data
+            }
+        except Exception as e:
+            logger.error(f"Error loading network: {e}")
+            return dash.no_update
 
 ############################################
 # Update target and R variable options,
