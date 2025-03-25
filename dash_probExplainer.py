@@ -30,105 +30,107 @@ reader = BIFReader('/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdja
 default_model_pgmpy = reader.get_model()
 
 # ---------- (3) APP LAYOUT ---------- #
-app.layout = dcc.Loading(
-    id="global-spinner",
-    overlay_style={"visibility":"visible", "filter": "blur(1px)"},
-    type="circle",        # You can choose "circle", "dot", "default", etc.
-    fullscreen=False,      # This ensures it covers the entire page
-    children=html.Div([
-    html.H1("Bayesian Network ProbExplainer ", style={'textAlign': 'center'}),
+app.layout = html.Div([
+    dcc.Loading(
+        id="global-spinner",
+        overlay_style={"visibility":"visible", "filter": "blur(1px)"},
+        type="circle",        # You can choose "circle", "dot", "default", etc.
+        fullscreen=False,      # This ensures it covers the entire page
+        children=html.Div([
+        html.H1("Bayesian Network ProbExplainer ", style={'textAlign': 'center'}),
 
-    # Section to upload .bif file or use default network
-    html.Div([
-        html.H3("Upload a .bif File or Use Default Network (network_5.bif)", style={'textAlign': 'center'}),
-        dcc.Upload(
-            id='upload-bif',
-            children=html.Button('Upload .bif File'),
-            style={'textAlign': 'center'}
-        ),
+        # Section to upload .bif file or use default network
+        html.Div([
+            html.H3("Upload a .bif File or Use Default Network (network_5.bif)", style={'textAlign': 'center'}),
+            dcc.Upload(
+                id='upload-bif',
+                children=html.Button('Upload .bif File'),
+                style={'textAlign': 'center'}
+            ),
+            html.Br(),
+            dcc.Checklist(
+                id='use-default-network',
+                options=[{'label': ' Use Default Network (network_5.bif)', 'value': 'default'}],
+                value=['default'],  # By default uses 'network_5.bif'
+                style={'textAlign': 'center'}
+            ),
+        ], style={'textAlign': 'center'}),
+
+        html.Hr(),
+
+        # Section to select action
+        html.Div([
+            html.H3("Select an Action to Perform", style={'textAlign': 'center'}),
+            dcc.Dropdown(
+                id='action-dropdown',
+                options=[
+                    {'label': 'Compute Posterior', 'value': 'posterior'},
+                    {'label': 'Map Independence', 'value': 'map_independence'},
+                    # Changed label from "Get Defeaters (Not Implemented)" to "Get Defeaters"
+                    {'label': 'Get Defeaters', 'value': 'defeaters'}
+                ],
+                value='posterior',  # Default action
+                style={'width': '50%', 'margin': '0 auto'}
+            )
+        ]),
+
+        html.Hr(),
+
+        # Evidence selection
+        html.Div([
+            html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
+            dcc.Dropdown(
+                id='evidence-vars-dropdown',
+                options=[{'label': var, 'value': var} for var in default_model_pgmpy.nodes()],
+                multi=True,
+                placeholder="Select evidence variables",
+                style={'width': '50%', 'margin': '0 auto'}
+            ),
+            html.Div(id='evidence-values-container')
+        ], style={'marginBottom': '20px'}),
+
+        html.Hr(),
+
+        # Target variables
+        html.Div([
+            html.H3("Select Target Variables", style={'textAlign': 'center'}),
+            dcc.Dropdown(
+                id='target-vars-dropdown',
+                options=[],  # Will be dynamically updated
+                multi=True,
+                placeholder="Select target variables",
+                style={'width': '50%', 'margin': '0 auto'}
+            )
+        ], style={'marginBottom': '20px'}),
+
+        html.Hr(),
+
+        # Set R (only needed for map_independence)
+        html.Div([
+            html.H3("Select Set R (only for Map Independence)", style={'textAlign': 'center'}),
+            dcc.Dropdown(
+                id='r-vars-dropdown',
+                options=[],
+                multi=True,
+                placeholder="Select R variables",
+                style={'width': '50%', 'margin': '0 auto'}
+            )
+        ], style={'marginBottom': '20px'}),
+
+        html.Hr(),
+
+        # Run button
+        html.Div([
+            html.Button('Run', id='run-action-button', n_clicks=0)
+        ], style={'textAlign': 'center'}),
         html.Br(),
-        dcc.Checklist(
-            id='use-default-network',
-            options=[{'label': ' Use Default Network (network_5.bif)', 'value': 'default'}],
-            value=['default'],  # By default uses 'network_5.bif'
-            style={'textAlign': 'center'}
-        ),
-    ], style={'textAlign': 'center'}),
+        html.Div(id='action-results', style={'textAlign': 'center'}),
 
-    html.Hr(),
-
-    # Section to select action
-    html.Div([
-        html.H3("Select an Action to Perform", style={'textAlign': 'center'}),
-        dcc.Dropdown(
-            id='action-dropdown',
-            options=[
-                {'label': 'Compute Posterior', 'value': 'posterior'},
-                {'label': 'Map Independence', 'value': 'map_independence'},
-                # Changed label from "Get Defeaters (Not Implemented)" to "Get Defeaters"
-                {'label': 'Get Defeaters', 'value': 'defeaters'}
-            ],
-            value='posterior',  # Default action
-            style={'width': '50%', 'margin': '0 auto'}
-        )
-    ]),
-
-    html.Hr(),
-
-    # Evidence selection
-    html.Div([
-        html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
-        dcc.Dropdown(
-            id='evidence-vars-dropdown',
-            options=[{'label': var, 'value': var} for var in default_model_pgmpy.nodes()],
-            multi=True,
-            placeholder="Select evidence variables",
-            style={'width': '50%', 'margin': '0 auto'}
-        ),
-        html.Div(id='evidence-values-container')
-    ], style={'marginBottom': '20px'}),
-
-    html.Hr(),
-
-    # Target variables
-    html.Div([
-        html.H3("Select Target Variables", style={'textAlign': 'center'}),
-        dcc.Dropdown(
-            id='target-vars-dropdown',
-            options=[],  # Will be dynamically updated
-            multi=True,
-            placeholder="Select target variables",
-            style={'width': '50%', 'margin': '0 auto'}
-        )
-    ], style={'marginBottom': '20px'}),
-
-    html.Hr(),
-
-    # Set R (only needed for map_independence)
-    html.Div([
-        html.H3("Select Set R (only for Map Independence)", style={'textAlign': 'center'}),
-        dcc.Dropdown(
-            id='r-vars-dropdown',
-            options=[],
-            multi=True,
-            placeholder="Select R variables",
-            style={'width': '50%', 'margin': '0 auto'}
-        )
-    ], style={'marginBottom': '20px'}),
-
-    html.Hr(),
-
-    # Run button
-    html.Div([
-        html.Button('Run', id='run-action-button', n_clicks=0)
-    ], style={'textAlign': 'center'}),
-    html.Br(),
-    html.Div(id='action-results', style={'textAlign': 'center'}),
-
-    # dcc.Store to keep the chosen network
-    dcc.Store(id='stored-network'),
+        # dcc.Store to keep the chosen network
+        dcc.Store(id='stored-network'),
+    ])
+    ) # end of dcc.Loading
 ])
-)
 
 # ---------- (4) CALLBACKS ---------- #
 
