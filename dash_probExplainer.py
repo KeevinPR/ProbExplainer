@@ -176,16 +176,20 @@ app.layout = html.Div([
         html.Hr(),
 
         # Target variables
-        html.Div([
-            html.H3("Select Target Variables", style={'textAlign': 'center'}),
-            dcc.Dropdown(
-                id='target-vars-dropdown',
-                options=[],  # Will be dynamically updated
-                multi=True,
-                placeholder="Select target variables",
-                style={'width': '50%', 'margin': '0 auto'}
-            )
-        ], style={'marginBottom': '20px'}),
+        html.Div(
+            id='target-section',
+            style={'marginBottom': '20px', 'display': 'none'},
+            children=[
+                html.H3("Select Target Variables", style={'textAlign': 'center'}),
+                dcc.Dropdown(
+                    id='target-vars-dropdown',
+                    options=[],  # Will be filled after the network is loaded
+                    multi=True,
+                    placeholder="Select target variables",
+                    style={'width': '50%', 'margin': '0 auto'}
+                )
+            ]
+        ),
 
         html.Hr(),
 
