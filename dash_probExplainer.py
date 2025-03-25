@@ -42,7 +42,6 @@ app.layout = html.Div([
         html.H1("Bayesian Network ProbExplainer ", style={'textAlign': 'center'}),
 
 
-
         ########################################################
             # Info text
             ########################################################
