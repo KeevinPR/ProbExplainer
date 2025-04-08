@@ -225,7 +225,47 @@ app.layout = html.Div([
             # Store to keep the nodes and states (so we don't parse repeatedly)
             dcc.Store(id='stored-model-info'),
         ])
-    )
+    ),
+    dbc.Popover(
+        [
+            dbc.PopoverHeader(
+                [
+                    "Help",
+                    html.I(className="fa fa-info-circle ms-2", style={"color": "#0d6efd"})
+                ],
+                style={
+                    "backgroundColor": "#f8f9fa",  # Light gray background
+                    "fontWeight": "bold"
+                }
+            ),
+            dbc.PopoverBody(
+                [
+                    html.P(
+                        [
+                            "For details and content of the dataset, check out: ",
+                            html.A(
+                                "network_5.bif",
+                                href="https://github.com/KeevinPR/ProbExplainer/blob/main/expert_networks/network_5.bif",
+                                target="_blank",
+                                style={"textDecoration": "underline", "color": "#0d6efd"}
+                            ),
+                        ]
+                    ),
+                    html.Hr(),  # Horizontal rule for a modern divider
+                    html.P("Feel free to upload your own dataset at any time.")
+                ],
+                style={
+                    "backgroundColor": "#ffffff",
+                    "borderRadius": "0 0 0.25rem 0.25rem"
+                }
+            ),
+        ],
+        id="help-popover-default-dataset",
+        target="help-button-default-dataset",
+        placement="right",
+        is_open=False,
+        trigger="hover"
+    ),
 ])
 
 
