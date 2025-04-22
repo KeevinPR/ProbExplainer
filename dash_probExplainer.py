@@ -6,7 +6,7 @@ import json
 import logging
 import warnings
 from dash.exceptions import PreventUpdate
-
+import pandas as pd
 from pgmpy.readwrite import BIFReader
 
 import pyAgrum as gum
@@ -416,41 +416,54 @@ def update_evidence_values(evidence_vars, model_info):
         children.append(
             html.Div(
                 [
-                    html.Label(f"Value for {var}: ", style={'marginRight': '10px'}),
+                    html.Label(f"Value for {var}:", style={'marginRight': '8px'}),
                     dcc.Dropdown(
                         id={'type': 'evidence-value-dropdown', 'index': var},
                         options=[{'label': s, 'value': s} for s in var_states],
-                        style={'width': '200px'}
+                        style={'width': '200px', 'marginLeft': '8px', 'marginTop': '15px'}
                     )
                 ],
-                style={'textAlign': 'center', 'marginBottom': '10px'}
+                style={
+                    'display': 'flex',
+                    'justifyContent': 'center',
+                    'alignItems': 'center',
+                    'marginBottom': '12px',
+                    'marginTop': '12px'
+                }
             )
         )
     return children
 
 
-# (F) OPTIONAL: If you want to exclude chosen evidence from target/R
+# (F) OPTIONAL: If you want to exclude chosen evidence from target/R and set R
+
 @app.callback(
     Output('target-vars-dropdown', 'options', allow_duplicate=True),
     Output('r-vars-dropdown', 'options', allow_duplicate=True),
     Input('evidence-vars-dropdown', 'value'),
+    Input('target-vars-dropdown', 'value'),               # ← new
     State('stored-model-info', 'data'),
     prevent_initial_call=True
 )
-def exclude_evidence_from_target_r(evidence_vars, model_info):
+def exclude_evidence_and_target(evidence_vars, target_vars, model_info):
     if not model_info:
         raise PreventUpdate
 
-    all_nodes = model_info['nodes']
-    if not evidence_vars:
-        # If no evidence chosen, all nodes valid
-        opts = [{'label': n, 'value': n} for n in all_nodes]
-        return opts, opts
+    all_nodes = set(model_info['nodes'])
+    ev = set(evidence_vars or [])
+    tv = set(target_vars or [])
 
-    ev_set = set(evidence_vars)
-    filtered = [n for n in all_nodes if n not in ev_set]
-    opts = [{'label': n, 'value': n} for n in filtered]
-    return opts, opts
+    # Targets always exclude evidence
+    target_opts = [
+        {'label': n, 'value': n}
+        for n in sorted(all_nodes - ev)
+    ]
+    # R excludes BOTH evidence and target
+    r_opts = [
+        {'label': n, 'value': n}
+        for n in sorted(all_nodes - ev - tv)
+    ]
+    return target_opts, r_opts
 
 
 # (G) Main callback: run the chosen action
@@ -507,11 +520,19 @@ def run_action(n_clicks, action, stored_network,
             posterior_array = bn_adapter.compute_posterior(evidence_dict, target_vars)
             domain = bn_adapter.get_domain_of(target_vars)
             probs_list = posterior_array.flatten().tolist()
-
-            results_str = []
-            for i, states in enumerate(domain):
-                results_str.append(f"{states} -> {probs_list[i]:.6f}")
-            return html.Pre("Compute Posterior\n" + "\n".join(results_str))
+            # Create a DataFrame for better display
+            df = pd.DataFrame({
+                'State': domain,
+                'Probability': [f"{p:.6f}" for p in probs_list]
+            })
+            table = dbc.Table.from_dataframe(df, bordered=True, striped=True, hover=True)
+            return dbc.Card(
+                dbc.CardBody([
+                    html.H4("Compute Posterior", className="card-title"),
+                    table
+                ]),
+                className="mt-3"
+            )
 
         except ImplausibleEvidenceException:
             return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
@@ -530,14 +551,16 @@ def run_action(n_clicks, action, stored_network,
             independence_bool = bn_adapter.map_independence(r_vars, evidence_dict, map_dict)
 
             if independence_bool:
-                return html.Div(
+                return dbc.Alert(
                     f"The MAP assignment {map_dict} is NOT altered by interventions on {r_vars} (INDEPENDENT).",
-                    style={'color': 'green'}
+                    color="success",
+                    className="mt-3"
                 )
             else:
-                return html.Div(
+                return dbc.Alert(
                     f"The MAP assignment {map_dict} IS altered by {r_vars} (DEPENDENT).",
-                    style={'color': 'blue'}
+                    color="primary",
+                    className="mt-3"
                 )
         except ImplausibleEvidenceException:
             return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
@@ -566,13 +589,16 @@ def run_action(n_clicks, action, stored_network,
             else:
                 irrelevant_str = "\n".join(map(str, irrelevant_sets))
 
-            return html.Div([
-                html.H4("Get Defeaters Results"),
-                html.P("Relevant sets (these can alter the MAP assignment):"),
-                html.Pre(relevant_str),
-                html.P("Irrelevant sets (cannot alter MAP):"),
-                html.Pre(irrelevant_str)
-            ], style={'whiteSpace': 'pre-wrap'})
+            return dbc.Card(
+                dbc.CardBody([
+                    html.H4("Get Defeaters Results", className="card-title"),
+                    html.H5("Relevant sets:", className="mt-3"),
+                    html.Ul([html.Li(str(s)) for s in relevant_sets]) or html.P("None"),
+                    html.H5("Irrelevant sets:", className="mt-3"),
+                    html.Ul([html.Li(str(s)) for s in irrelevant_sets]) or html.P("None"),
+                ]),
+                className="mt-3"
+            )
 
         except ImplausibleEvidenceException:
             return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
