@@ -227,13 +227,7 @@ h1 {
     margin-top: -2px; /* Simula "subir" 1-2px */
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
-  
-  /* Subtle hover effect on the card */
-  .card:hover {
-    margin-top: -2px; /* Simula "subir" 1-2px */
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-  }
-  
+
 .popover {
     z-index: 9999 !important;
 }
