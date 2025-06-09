@@ -162,7 +162,7 @@ app.layout = html.Div([
 
             # Section to select action
             html.Div(className="card", children=[
-                html.H3("Select an Action to Perform", style={'textAlign': 'center'}),
+                html.H3("2. Select an Action to Perform", style={'textAlign': 'center'}),
                 dcc.Dropdown(
                     id='action-dropdown',
                     options=[
@@ -177,44 +177,179 @@ app.layout = html.Div([
 
             # Evidence selection
             html.Div(className="card", children=[
-                html.H3("Select Evidence Variables", style={'textAlign': 'center'}),
-                dcc.Dropdown(
-                    id='evidence-vars-dropdown',
-                    options=[],  # now empty until network loaded
-                    multi=True,
-                    placeholder="Select evidence variables",
-                    style={'width': '50%', 'margin': '0 auto'}
+                html.Div([
+                    html.H3("3. Select Evidence Variables", style={'display': 'inline-block', 'marginRight': '10px', 'textAlign': 'center'}),
+                    dbc.Button(
+                        html.I(className="fa fa-question-circle"),
+                        id="help-button-evidence",
+                        color="link",
+                        style={"display": "inline-block", "verticalAlign": "middle", "padding": "0", "marginLeft": "5px"}
+                    ),
+                ], style={"textAlign": "center", "position": "relative"}),
+                
+                # Buttons for bulk selection
+                html.Div([
+                    dbc.Button(
+                        "Select All",
+                        id="select-all-evidence",
+                        color="outline-primary",
+                        size="sm",
+                        style={'marginRight': '10px'}
+                    ),
+                    dbc.Button(
+                        "Clear All",
+                        id="clear-evidence",
+                        color="outline-secondary",
+                        size="sm"
+                    )
+                ], style={'textAlign': 'center', 'marginBottom': '15px'}),
+                
+                # Checkbox container for evidence variables
+                html.Div(
+                    id='evidence-checkbox-container',
+                    style={
+                        'maxHeight': '200px',
+                        'overflowY': 'auto',
+                        'border': '1px solid #ddd',
+                        'borderRadius': '5px',
+                        'padding': '10px',
+                        'margin': '0 auto',
+                        'width': '80%',
+                        'backgroundColor': '#f8f9fa'
+                    }
                 ),
+                
                 html.Div(id='evidence-values-container')
-            ], style={'marginBottom': '20px'}),
+            ]),
 
             # Target variables
             html.Div(className="card", children=[
-                html.H3("Select Target Variables", style={'textAlign': 'center'}),
-                dcc.Dropdown(
-                    id='target-vars-dropdown',
-                    options=[],  # dynamically updated
-                    multi=True,
-                    placeholder="Select target variables",
-                    style={'width': '50%', 'margin': '0 auto'}
-                )
-            ], style={'marginBottom': '20px'}),
+                html.Div([
+                    html.H3("4. Select Target Variables", style={'display': 'inline-block', 'marginRight': '10px', 'textAlign': 'center'}),
+                    dbc.Button(
+                        html.I(className="fa fa-question-circle"),
+                        id="help-button-targets",
+                        color="link",
+                        style={"display": "inline-block", "verticalAlign": "middle", "padding": "0", "marginLeft": "5px"}
+                    ),
+                ], style={"textAlign": "center", "position": "relative"}),
+                
+                # Buttons for bulk selection
+                html.Div([
+                    dbc.Button(
+                        "Select All",
+                        id="select-all-targets",
+                        color="outline-primary",
+                        size="sm",
+                        style={'marginRight': '10px'}
+                    ),
+                    dbc.Button(
+                        "Clear All",
+                        id="clear-targets",
+                        color="outline-secondary",
+                        size="sm"
+                    )
+                ], style={'textAlign': 'center', 'marginBottom': '15px'}),
+                
+                # Checkbox container for target variables
+                html.Div(
+                    id='target-checkbox-container',
+                    style={
+                        'maxHeight': '200px',
+                        'overflowY': 'auto',
+                        'border': '1px solid #ddd',
+                        'borderRadius': '5px',
+                        'padding': '10px',
+                        'margin': '0 auto',
+                        'width': '80%',
+                        'backgroundColor': '#f8f9fa'
+                    }
+                ),
+                
+                # Info message about intelligent selection
+                html.Div([
+                    html.I(className="fa fa-info-circle", style={'marginRight': '5px', 'color': '#6c757d'}),
+                    html.Span("Target variables automatically exclude evidence variables. Previous selections are preserved when possible.", 
+                             style={'fontSize': '11px', 'color': '#6c757d'})
+                ], style={'textAlign': 'center', 'marginTop': '8px'}),
+            ]),
 
             # Set R (only needed for map_independence)
             html.Div(className="card", children=[
-                html.H3("Select Set R (only for Map Independence)", style={'textAlign': 'center'}),
-                dcc.Dropdown(
-                    id='r-vars-dropdown',
-                    options=[],
-                    multi=True,
-                    placeholder="Select R variables",
-                    style={'width': '50%', 'margin': '0 auto'}
-                )
-            ], style={'marginBottom': '20px'}),
+                html.Div([
+                    html.H3("5. Select Set R (only for Map Independence)", style={'display': 'inline-block', 'marginRight': '10px', 'textAlign': 'center'}),
+                    dbc.Button(
+                        html.I(className="fa fa-question-circle"),
+                        id="help-button-r-vars",
+                        color="link",
+                        style={"display": "inline-block", "verticalAlign": "middle", "padding": "0", "marginLeft": "5px"}
+                    ),
+                ], style={"textAlign": "center", "position": "relative"}),
+                
+                # Buttons for bulk selection
+                html.Div([
+                    dbc.Button(
+                        "Select All",
+                        id="select-all-r-vars",
+                        color="outline-primary",
+                        size="sm",
+                        style={'marginRight': '10px'}
+                    ),
+                    dbc.Button(
+                        "Clear All",
+                        id="clear-r-vars",
+                        color="outline-secondary",
+                        size="sm"
+                    )
+                ], style={'textAlign': 'center', 'marginBottom': '15px'}),
+                
+                # Checkbox container for R variables
+                html.Div(
+                    id='r-vars-checkbox-container',
+                    style={
+                        'maxHeight': '200px',
+                        'overflowY': 'auto',
+                        'border': '1px solid #ddd',
+                        'borderRadius': '5px',
+                        'padding': '10px',
+                        'margin': '0 auto',
+                        'width': '80%',
+                        'backgroundColor': '#f8f9fa'
+                    }
+                ),
+                
+                # Info message about R set selection
+                html.Div([
+                    html.I(className="fa fa-info-circle", style={'marginRight': '5px', 'color': '#6c757d'}),
+                    html.Span("R variables exclude both evidence and target variables.", 
+                             style={'fontSize': '11px', 'color': '#6c757d'})
+                ], style={'textAlign': 'center', 'marginTop': '8px'}),
+            ]),
 
             # Run button
             html.Div([
-                html.Button('Run', id='run-action-button', n_clicks=0)
+                dbc.Button(
+                    [
+                        html.I(className="fas fa-play-circle me-2"),
+                        "Run Analysis"
+                    ],
+                    id='run-action-button',
+                    n_clicks=0,
+                    color="info",
+                    className="btn-lg",
+                    style={
+                        'fontSize': '1.1rem',
+                        'padding': '0.75rem 2rem',
+                        'borderRadius': '8px',
+                        'boxShadow': '0 2px 4px rgba(0,0,0,0.1)',
+                        'transition': 'all 0.3s ease',
+                        'backgroundColor': '#00A2E1',
+                        'border': 'none',
+                        'margin': '1rem 0',
+                        'color': 'white',
+                        'fontWeight': '500'
+                    }
+                )
             ], style={'textAlign': 'center'}),
             html.Br(),
             html.Div(id='action-results', style={'textAlign': 'center'}),
@@ -224,6 +359,11 @@ app.layout = html.Div([
 
             # Store to keep the nodes and states (so we don't parse repeatedly)
             dcc.Store(id='stored-model-info'),
+            
+            # Stores for tracking selections
+            dcc.Store(id='previous-evidence-selection', data=[]),
+            dcc.Store(id='previous-target-selection', data=[]),
+            dcc.Store(id='previous-r-selection', data=[]),
         ])
     ),
     dbc.Popover(
@@ -265,6 +405,94 @@ app.layout = html.Div([
         placement="right",
         is_open=False,
         trigger="hover"
+    ),
+    
+    # Add Evidence Selection Popover
+    dbc.Popover(
+        [
+            dbc.PopoverHeader(
+                [
+                    "Evidence Selection",
+                    html.I(className="fa fa-info-circle ms-2", style={"color": "#0d6efd"})
+                ],
+                style={"backgroundColor": "#f8f9fa", "fontWeight": "bold"}
+            ),
+            dbc.PopoverBody(
+                [
+                    html.P("Evidence variables are the known states in your Bayesian network."),
+                    html.P("Select one or more variables that you want to use as evidence."),
+                    html.P("For each selected variable, you'll need to specify its state."),
+                    html.P("These values will be used in the probabilistic analysis."),
+                ],
+                style={"backgroundColor": "#ffffff", "borderRadius": "0 0 0.25rem 0.25rem", "maxWidth": "300px"}
+            ),
+        ],
+        id="help-popover-evidence",
+        target="help-button-evidence",
+        placement="right",
+        is_open=False,
+        trigger="hover",
+        style={"position": "absolute", "zIndex": 1000, "marginLeft": "5px"}
+    ),
+
+    # Add Target Variables Popover
+    dbc.Popover(
+        [
+            dbc.PopoverHeader(
+                [
+                    "Target Variables",
+                    html.I(className="fa fa-info-circle ms-2", style={"color": "#0d6efd"})
+                ],
+                style={"backgroundColor": "#f8f9fa", "fontWeight": "bold"}
+            ),
+            dbc.PopoverBody(
+                [
+                    html.P("Target variables are the nodes you want to analyze in your Bayesian network."),
+                    html.P("Select one or more variables for your analysis:"),
+                    html.Ul([
+                        html.Li("Compute Posterior: Variables to compute probabilities for"),
+                        html.Li("Map Independence: Variables for MAP estimation"),
+                        html.Li("Get Defeaters: Variables to find defeaters for")
+                    ]),
+                    html.P("Variables used as evidence cannot be selected as targets."),
+                ],
+                style={"backgroundColor": "#ffffff", "borderRadius": "0 0 0.25rem 0.25rem", "maxWidth": "300px"}
+            ),
+        ],
+        id="help-popover-targets",
+        target="help-button-targets",
+        placement="right",
+        is_open=False,
+        trigger="hover",
+        style={"position": "absolute", "zIndex": 1000, "marginLeft": "5px"}
+    ),
+
+    # Add R Variables Popover
+    dbc.Popover(
+        [
+            dbc.PopoverHeader(
+                [
+                    "Set R Variables",
+                    html.I(className="fa fa-info-circle ms-2", style={"color": "#0d6efd"})
+                ],
+                style={"backgroundColor": "#f8f9fa", "fontWeight": "bold"}
+            ),
+            dbc.PopoverBody(
+                [
+                    html.P("Set R is only used for Map Independence analysis."),
+                    html.P("These variables represent the intervention set for testing independence."),
+                    html.P("The analysis will check if the MAP assignment is independent of interventions on these variables."),
+                    html.P("R variables exclude both evidence and target variables."),
+                ],
+                style={"backgroundColor": "#ffffff", "borderRadius": "0 0 0.25rem 0.25rem", "maxWidth": "300px"}
+            ),
+        ],
+        id="help-popover-r-vars",
+        target="help-button-r-vars",
+        placement="right",
+        is_open=False,
+        trigger="hover",
+        style={"position": "absolute", "zIndex": 1000, "marginLeft": "5px"}
     ),
 ])
 
@@ -384,28 +612,54 @@ def parse_network_and_store_info(stored_net):
         return dash.no_update
 
 
-# (D) Update Evidence/Target/R options from the stored model info
+# (D) Populate evidence checkbox container only if a model is available
 @app.callback(
-    Output('evidence-vars-dropdown', 'options'),
-    Output('target-vars-dropdown', 'options'),
-    Output('r-vars-dropdown', 'options'),
+    Output('evidence-checkbox-container', 'children'),
     Input('stored-model-info', 'data')
 )
-def update_dropdown_options(model_info):
+def update_evidence_variables(model_info):
     if not model_info:
-        return [], [], []
-    nodes_list = model_info['nodes']
-    opts = [{'label': var, 'value': var} for var in nodes_list]
-    return opts, opts, opts
+        return html.Div("No network loaded", style={'textAlign': 'center', 'color': '#666'})
+    
+    variables = model_info['nodes']
+    if not variables:
+        return html.Div("No variables found", style={'textAlign': 'center', 'color': '#666'})
+    
+    # Create checkboxes in a grid layout
+    checkboxes = []
+    for i, var in enumerate(variables):
+        checkboxes.append(
+            html.Div([
+                dcc.Checklist(
+                    id={'type': 'evidence-checkbox', 'index': var},
+                    options=[{'label': f' {var}', 'value': var}],
+                    value=[],
+                    style={'margin': '0'}
+                )
+            ], style={'display': 'inline-block', 'width': '50%', 'marginBottom': '5px'})
+        )
+    
+    return html.Div(checkboxes, style={'columnCount': '2', 'columnGap': '20px'})
 
-
-# (E) Generate the evidence-value dropdowns
+# Build the dynamic evidence-value dropdowns
 @app.callback(
     Output('evidence-values-container', 'children'),
-    Input('evidence-vars-dropdown', 'value'),
+    Input({'type': 'evidence-checkbox', 'index': ALL}, 'value'),
     State('stored-model-info', 'data')
 )
-def update_evidence_values(evidence_vars, model_info):
+def update_evidence_values(checkbox_values, model_info):
+    # Get selected evidence variables from checkboxes
+    ctx = dash.callback_context
+    if not ctx.inputs:
+        return []
+    
+    # Extract selected variables
+    evidence_vars = []
+    for input_info in ctx.inputs_list[0]:
+        if input_info['value']:  # If checkbox is checked
+            var_name = input_info['id']['index']
+            evidence_vars.append(var_name)
+    
     if not evidence_vars or not model_info:
         return []
 
@@ -416,71 +670,172 @@ def update_evidence_values(evidence_vars, model_info):
         children.append(
             html.Div(
                 [
-                    html.Label(f"Value for {var}:", style={'marginRight': '8px'}),
-                    dcc.Dropdown(
-                        id={'type': 'evidence-value-dropdown', 'index': var},
-                        options=[{'label': s, 'value': s} for s in var_states],
-                        style={'width': '200px', 'marginLeft': '8px', 'marginTop': '15px'}
+                    html.Div(
+                        [
+                            html.Label(
+                                f"Select value for {var}",
+                                style={'width': '40%', 'textAlign': 'right', 'paddingRight': '10px'}
+                            ),
+                            dcc.Dropdown(
+                                id={'type': 'evidence-value-dropdown', 'index': var},
+                                options=[{'label': s, 'value': s} for s in var_states],
+                                value=var_states[0] if var_states else None,
+                                style={'width': '60%'}
+                            )
+                        ],
+                        style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'}
                     )
                 ],
-                style={
-                    'display': 'flex',
-                    'justifyContent': 'center',
-                    'alignItems': 'center',
-                    'marginBottom': '12px',
-                    'marginTop': '12px'
-                }
+                style={'marginBottom': '10px', 'width': '50%', 'margin': '0 auto'}
             )
         )
     return children
 
-
-# (F) OPTIONAL: If you want to exclude chosen evidence from target/R and set R
-
+# Populate target variables, excluding those in evidence
 @app.callback(
-    Output('target-vars-dropdown', 'options', allow_duplicate=True),
-    Output('r-vars-dropdown', 'options', allow_duplicate=True),
-    Input('evidence-vars-dropdown', 'value'),
-    Input('target-vars-dropdown', 'value'),               # ← new
+    Output('target-checkbox-container', 'children'),
+    Output('previous-evidence-selection', 'data'),
+    Input({'type': 'evidence-checkbox', 'index': ALL}, 'value'),
     State('stored-model-info', 'data'),
-    prevent_initial_call=True
+    State('previous-evidence-selection', 'data'),
+    State('previous-target-selection', 'data')
 )
-def exclude_evidence_and_target(evidence_vars, target_vars, model_info):
+def update_target_options(checkbox_values, model_info, prev_evidence, prev_targets):
     if not model_info:
-        raise PreventUpdate
+        return html.Div("No network loaded", style={'textAlign': 'center', 'color': '#666'}), []
+    
+    # Get currently selected evidence variables from checkboxes
+    current_evidence = []
+    ctx = dash.callback_context
+    if ctx.inputs_list and ctx.inputs_list[0]:
+        for input_info in ctx.inputs_list[0]:
+            if input_info['value']:  # If checkbox is checked
+                var_name = input_info['id']['index']
+                current_evidence.append(var_name)
+    
+    all_vars = set(model_info['nodes'])
+    available = [v for v in all_vars if v not in current_evidence]
 
-    all_nodes = set(model_info['nodes'])
-    ev = set(evidence_vars or [])
-    tv = set(target_vars or [])
+    if not available:
+        return html.Div("No target variables available", style={'textAlign': 'center', 'color': '#666'}), current_evidence
+    
+    # Calculate which targets should remain selected:
+    # 1. Variables that were targets before and are still available
+    # 2. Variables that were removed from evidence and were targets before
+    newly_available = set(prev_evidence) - set(current_evidence)  # Variables removed from evidence
+    keep_selected = (set(prev_targets) & set(available)) | (newly_available & set(prev_targets))
+    
+    # Create checkboxes in a grid layout
+    checkboxes = []
+    for var in available:
+        # Pre-select if it should remain selected
+        initial_value = [var] if var in keep_selected else []
+        
+        checkboxes.append(
+            html.Div([
+                dcc.Checklist(
+                    id={'type': 'target-checkbox', 'index': var},
+                    options=[{'label': f' {var}', 'value': var}],
+                    value=initial_value,
+                    style={'margin': '0'}
+                )
+            ], style={'display': 'inline-block', 'width': '50%', 'marginBottom': '5px'})
+        )
+    
+    return html.Div(checkboxes, style={'columnCount': '2', 'columnGap': '20px'}), current_evidence
 
-    # Targets always exclude evidence
-    target_opts = [
-        {'label': n, 'value': n}
-        for n in sorted(all_nodes - ev)
-    ]
-    # R excludes BOTH evidence and target
-    r_opts = [
-        {'label': n, 'value': n}
-        for n in sorted(all_nodes - ev - tv)
-    ]
-    return target_opts, r_opts
+# Callback to track target selections for intelligent management
+@app.callback(
+    Output('previous-target-selection', 'data'),
+    Input({'type': 'target-checkbox', 'index': ALL}, 'value')
+)
+def track_target_selections(target_checkbox_values):
+    """Track which targets are currently selected"""
+    selected_targets = []
+    for checkbox_value in target_checkbox_values or []:
+        if checkbox_value:  # If checkbox is checked
+            selected_targets.extend(checkbox_value)
+    return selected_targets
 
+# Populate R variables, excluding evidence and targets
+@app.callback(
+    Output('r-vars-checkbox-container', 'children'),
+    Output('previous-r-selection', 'data'),
+    Input({'type': 'evidence-checkbox', 'index': ALL}, 'value'),
+    Input({'type': 'target-checkbox', 'index': ALL}, 'value'),
+    State('stored-model-info', 'data'),
+    State('previous-r-selection', 'data')
+)
+def update_r_vars_options(evidence_checkbox_values, target_checkbox_values, model_info, prev_r_vars):
+    if not model_info:
+        return html.Div("No network loaded", style={'textAlign': 'center', 'color': '#666'}), []
+    
+    # Get currently selected evidence and target variables
+    current_evidence = []
+    current_targets = []
+    
+    ctx = dash.callback_context
+    if ctx.inputs_list:
+        # Process evidence checkboxes
+        for input_info in ctx.inputs_list[0]:
+            if input_info['value']:
+                var_name = input_info['id']['index']
+                current_evidence.append(var_name)
+        
+        # Process target checkboxes
+        for input_info in ctx.inputs_list[1]:
+            if input_info['value']:
+                var_name = input_info['id']['index']
+                current_targets.append(var_name)
+    
+    all_vars = set(model_info['nodes'])
+    excluded = set(current_evidence) | set(current_targets)
+    available = [v for v in all_vars if v not in excluded]
+    
+    if not available:
+        return html.Div("No R variables available", style={'textAlign': 'center', 'color': '#666'}), []
+    
+    # Keep previously selected R variables that are still available
+    keep_selected = set(prev_r_vars) & set(available)
+    
+    # Create checkboxes in a grid layout
+    checkboxes = []
+    for var in available:
+        initial_value = [var] if var in keep_selected else []
+        
+        checkboxes.append(
+            html.Div([
+                dcc.Checklist(
+                    id={'type': 'r-vars-checkbox', 'index': var},
+                    options=[{'label': f' {var}', 'value': var}],
+                    value=initial_value,
+                    style={'margin': '0'}
+                )
+            ], style={'display': 'inline-block', 'width': '50%', 'marginBottom': '5px'})
+        )
+    
+    # Track current R selection
+    current_r = []
+    for checkbox_value in checkboxes:
+        # This is just for initialization, actual tracking happens in separate callback
+        pass
+    
+    return html.Div(checkboxes, style={'columnCount': '2', 'columnGap': '20px'}), list(keep_selected)
 
-# (G) Main callback: run the chosen action
+# Main callback: run the chosen action
 @app.callback(
     Output('action-results', 'children'),
     Input('run-action-button', 'n_clicks'),
     State('action-dropdown', 'value'),
     State('stored-network', 'data'),
-    State('evidence-vars-dropdown', 'value'),
     State({'type': 'evidence-value-dropdown', 'index': ALL}, 'value'),
     State({'type': 'evidence-value-dropdown', 'index': ALL}, 'id'),
-    State('target-vars-dropdown', 'value'),
-    State('r-vars-dropdown', 'value')
+    State({'type': 'target-checkbox', 'index': ALL}, 'value'),
+    State({'type': 'r-vars-checkbox', 'index': ALL}, 'value')
 )
 def run_action(n_clicks, action, stored_network,
-               evidence_vars, evidence_values, evidence_ids,
-               target_vars, r_vars):
+               evidence_values, evidence_ids,
+               target_checkbox_values, r_vars_checkbox_values):
     if not n_clicks:
         raise PreventUpdate
 
@@ -489,11 +844,23 @@ def run_action(n_clicks, action, stored_network,
 
     # Build evidence dict
     evidence_dict = {}
-    if evidence_vars and evidence_values and evidence_ids:
+    if evidence_values and evidence_ids:
         for ev_id, val in zip(evidence_ids, evidence_values):
             if val is not None:  # ignore if none
                 var = ev_id['index']
                 evidence_dict[var] = val
+
+    # Extract selected target variables from checkboxes
+    target_vars = []
+    for checkbox_value in target_checkbox_values:
+        if checkbox_value:  # If checkbox is checked, it contains the variable name
+            target_vars.extend(checkbox_value)
+
+    # Extract selected R variables from checkboxes
+    r_vars = []
+    for checkbox_value in r_vars_checkbox_values:
+        if checkbox_value:  # If checkbox is checked, it contains the variable name
+            r_vars.extend(checkbox_value)
 
     from probExplainer.model.BayesianNetwork import BayesianNetworkPyAgrum, ImplausibleEvidenceException
 
@@ -608,6 +975,108 @@ def run_action(n_clicks, action, stored_network,
     else:
         return html.Div("Unknown action.", style={'color': 'red'})
 
+# Callbacks for evidence selection buttons
+@app.callback(
+    Output({'type': 'evidence-checkbox', 'index': ALL}, 'value'),
+    [Input('select-all-evidence', 'n_clicks'),
+     Input('clear-evidence', 'n_clicks')],
+    [State({'type': 'evidence-checkbox', 'index': ALL}, 'id')],
+    prevent_initial_call=True
+)
+def update_evidence_selection(select_all_clicks, clear_clicks, checkbox_ids):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        raise PreventUpdate
+    
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if button_id == 'select-all-evidence':
+        # Select all checkboxes
+        return [[checkbox_id['index']] for checkbox_id in checkbox_ids]
+    elif button_id == 'clear-evidence':
+        # Clear all checkboxes
+        return [[] for _ in checkbox_ids]
+    
+    raise PreventUpdate
+
+# Callbacks for target selection buttons
+@app.callback(
+    Output({'type': 'target-checkbox', 'index': ALL}, 'value'),
+    [Input('select-all-targets', 'n_clicks'),
+     Input('clear-targets', 'n_clicks')],
+    [State({'type': 'target-checkbox', 'index': ALL}, 'id')],
+    prevent_initial_call=True
+)
+def update_target_selection(select_all_clicks, clear_clicks, checkbox_ids):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        raise PreventUpdate
+    
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if button_id == 'select-all-targets':
+        # Select all checkboxes
+        return [[checkbox_id['index']] for checkbox_id in checkbox_ids]
+    elif button_id == 'clear-targets':
+        # Clear all checkboxes
+        return [[] for _ in checkbox_ids]
+    
+    raise PreventUpdate
+
+# Callbacks for R variables selection buttons
+@app.callback(
+    Output({'type': 'r-vars-checkbox', 'index': ALL}, 'value'),
+    [Input('select-all-r-vars', 'n_clicks'),
+     Input('clear-r-vars', 'n_clicks')],
+    [State({'type': 'r-vars-checkbox', 'index': ALL}, 'id')],
+    prevent_initial_call=True
+)
+def update_r_vars_selection(select_all_clicks, clear_clicks, checkbox_ids):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        raise PreventUpdate
+    
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if button_id == 'select-all-r-vars':
+        # Select all checkboxes
+        return [[checkbox_id['index']] for checkbox_id in checkbox_ids]
+    elif button_id == 'clear-r-vars':
+        # Clear all checkboxes
+        return [[] for _ in checkbox_ids]
+    
+    raise PreventUpdate
+
+# Add callbacks for help popovers
+@app.callback(
+    Output("help-popover-evidence", "is_open"),
+    Input("help-button-evidence", "n_clicks"),
+    State("help-popover-evidence", "is_open")
+)
+def toggle_evidence_popover(n, is_open):
+    if n:
+        return not is_open
+    return is_open
+
+@app.callback(
+    Output("help-popover-targets", "is_open"),
+    Input("help-button-targets", "n_clicks"),
+    State("help-popover-targets", "is_open")
+)
+def toggle_targets_popover(n, is_open):
+    if n:
+        return not is_open
+    return is_open
+
+@app.callback(
+    Output("help-popover-r-vars", "is_open"),
+    Input("help-button-r-vars", "n_clicks"),
+    State("help-popover-r-vars", "is_open")
+)
+def toggle_r_vars_popover(n, is_open):
+    if n:
+        return not is_open
+    return is_open
 
 # ---------- (5) RUN THE SERVER ---------- #
 if __name__ == '__main__':
