@@ -21,7 +21,10 @@ logger.setLevel(logging.INFO)
 # ---------- (1) CREATE DASH APP ---------- #
 app = dash.Dash(
     __name__,
-    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    external_stylesheets=[
+        dbc.themes.BOOTSTRAP,
+        'https://bayes-interpret.com/Evidence/ProbExplainerDash/assets/liquid-glass.css'  # Apple Liquid Glass CSS
+    ],
     requests_pathname_prefix='/Evidence/ProbExplainerDash/',
     suppress_callback_exceptions=True
 )
