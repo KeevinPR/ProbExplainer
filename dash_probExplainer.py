@@ -737,13 +737,13 @@ def parse_network_and_store_info(stored_net):
             if len(problematic_nodes) > 3:
                 warning_msg += f" and {len(problematic_nodes) - 3} more"
             
-                    return {
-            'nodes': nodes_list,
-            'states': states_dict
-        }, create_warning_notification(
-            warning_msg,
-            "Network Structure Issues"
-        )
+            return {
+                'nodes': nodes_list,
+                'states': states_dict
+            }, create_warning_notification(
+                warning_msg,
+                "Network Structure Issues"
+            )
 
         # Success case - no notification needed
         return {
