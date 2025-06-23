@@ -374,6 +374,9 @@ app.layout = html.Div([
             dcc.Store(id='previous-evidence-selection', data=[]),
             dcc.Store(id='previous-target-selection', data=[]),
             dcc.Store(id='previous-r-selection', data=[]),
+            
+            # Notification system
+            dcc.Store(id='notification-store'),
         ])
     ),
     dbc.Popover(
@@ -504,6 +507,18 @@ app.layout = html.Div([
         trigger="hover",
         style={"position": "absolute", "zIndex": 1000, "marginLeft": "5px"}
     ),
+    
+    # Notification container (outside dcc.Loading to avoid interference)
+    html.Div(id='notification-container', style={
+        'position': 'fixed',
+        'bottom': '20px',
+        'right': '20px',
+        'zIndex': '1000',
+        'width': '300px',
+        'transition': 'all 0.3s ease-in-out',
+        'transform': 'translateY(100%)',
+        'opacity': '0'
+    }),
 ])
 
 
@@ -538,13 +553,14 @@ def use_default_dataset(value):
 # (B) Store the chosen network (default or uploaded) in 'stored-network'
 @app.callback(
     Output('stored-network', 'data'),
+    Output('notification-store', 'data'),
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
     Input('use-default-network', 'value')
 )
 def load_network(contents, filename, default_value):
     """
-    Store path/string in 'stored-network'.
+    Store path/string in 'stored-network' and provide user feedback via notifications.
     
     - If 'default' is in default_value => use the known path to network_5.bif (or your default).
     - If user uploads => decode the BIF string.
@@ -556,33 +572,111 @@ def load_network(contents, filename, default_value):
 
     # If "Use default" is checked => always override with that
     if 'default' in default_value:
-        logger.info("Using default network: network_5.bif")
-        return {
-            'network_name': 'network_5.bif',
-            'network_type': 'path',
-            # Adjust path to your real default BIF
-            'content': '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif'
-        }
+        try:
+            # Check if default file exists and is valid
+            default_path = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif'
+            
+            # Validate default file
+            with open(default_path, 'r') as f:
+                default_data = f.read()
+            test_reader = BIFReader(string=default_data)
+            _ = test_reader.get_model()  # Validate structure
+            
+            logger.info("Using default network: network_5.bif")
+            return {
+                'network_name': 'network_5.bif',
+                'network_type': 'path',
+                'content': default_path
+            }, None
+        except FileNotFoundError:
+            logger.error("Default network file not found")
+            return dash.no_update, create_error_notification(
+                "Default network file not found. Please upload your own BIF file.",
+                "File Not Found"
+            )
+        except Exception as e:
+            logger.error(f"Error loading default network: {e}")
+            return dash.no_update, create_error_notification(
+                f"Error loading default network: {str(e)}",
+                "Invalid Default Network"
+            )
 
     # Otherwise, if user uploaded something:
     if contents:
         logger.info(f"Attempting to load uploaded network: {filename}")
-        content_type, content_string = contents.split(',')
-        decoded = base64.b64decode(content_string)
+        
+        # Validate file extension
+        if filename and not filename.lower().endswith('.bif'):
+            return dash.no_update, create_warning_notification(
+                "Please upload a .bif file. Other formats are not supported.",
+                "Invalid File Format"
+            )
+        
         try:
+            content_type, content_string = contents.split(',')
+            decoded = base64.b64decode(content_string)
             bif_data = decoded.decode('utf-8')
+            
             # Check if valid BIF with pgmpy
             reader_check = BIFReader(string=bif_data)
-            _ = reader_check.get_model()  # fails if invalid
-            logger.info(f"Valid network uploaded: {filename}")
+            model = reader_check.get_model()  # fails if invalid
+            
+            # Additional validations
+            if not model.nodes():
+                return dash.no_update, create_error_notification(
+                    "The uploaded network has no nodes. Please check your BIF file.",
+                    "Empty Network"
+                )
+                
+            node_count = len(model.nodes())
+            if node_count > 100:
+                return {
+                    'network_name': filename,
+                    'network_type': 'string',
+                    'content': bif_data
+                }, create_warning_notification(
+                    f"Large network detected ({node_count} nodes). Performance may be affected.",
+                    "Large Network"
+                )
+            
+            logger.info(f"Valid network uploaded: {filename} with {node_count} nodes")
             return {
                 'network_name': filename,
                 'network_type': 'string',
                 'content': bif_data
-            }
+            }, None
+            
+        except UnicodeDecodeError:
+            logger.error(f"Error decoding file: {filename}")
+            return dash.no_update, create_error_notification(
+                "Unable to decode the file. Please ensure it's a valid text-based BIF file.",
+                "File Encoding Error"
+            )
         except Exception as e:
+            error_msg = str(e)
             logger.error(f"Error loading network: {e}")
-            return dash.no_update
+            
+            # Provide specific error messages for common issues
+            if "variable" in error_msg.lower() and "not found" in error_msg.lower():
+                return dash.no_update, create_error_notification(
+                    "Network contains undefined variables. Please check your BIF file structure.",
+                    "Invalid Network Structure"
+                )
+            elif "probability" in error_msg.lower():
+                return dash.no_update, create_error_notification(
+                    "Network contains invalid probability values. Please verify your CPTs.",
+                    "Invalid Probabilities"
+                )
+            elif "parse" in error_msg.lower() or "syntax" in error_msg.lower():
+                return dash.no_update, create_error_notification(
+                    "BIF file has syntax errors. Please check the file format.",
+                    "Syntax Error"
+                )
+            else:
+                return dash.no_update, create_error_notification(
+                    f"Error loading network: {error_msg}",
+                    "Network Loading Error"
+                )
 
     raise PreventUpdate
 
@@ -590,7 +684,9 @@ def load_network(contents, filename, default_value):
 # (C) Once 'stored-network' is set, parse it with pgmpy => store nodes/states in 'stored-model-info'
 @app.callback(
     Output('stored-model-info', 'data'),
-    Input('stored-network', 'data')
+    Output('notification-store', 'data', allow_duplicate=True),
+    Input('stored-network', 'data'),
+    prevent_initial_call=True
 )
 def parse_network_and_store_info(stored_net):
     if not stored_net:
@@ -607,19 +703,74 @@ def parse_network_and_store_info(stored_net):
         net = reader_local.get_model()
         nodes_list = sorted(net.nodes())
 
-        # For each node, gather possible states:
-        states_dict = {}
-        for var in nodes_list:
-            cpd = net.get_cpds(var)
-            states_dict[var] = cpd.state_names[var]
+        # Validate network structure
+        if not nodes_list:
+            logger.error("Network has no nodes")
+            return dash.no_update, create_error_notification(
+                "The network has no nodes. Please check your BIF file.",
+                "Empty Network"
+            )
 
+        # For each node, gather possible states and validate:
+        states_dict = {}
+        problematic_nodes = []
+        
+        for var in nodes_list:
+            try:
+                cpd = net.get_cpds(var)
+                states = cpd.state_names[var]
+                
+                # Validate states
+                if not states or len(states) == 0:
+                    problematic_nodes.append(f"{var} (no states)")
+                elif len(states) == 1:
+                    logger.warning(f"Node {var} has only one state: {states[0]}")
+                
+                states_dict[var] = states
+            except Exception as e:
+                logger.error(f"Error processing node {var}: {e}")
+                problematic_nodes.append(f"{var} (processing error)")
+
+        # Report warnings for problematic nodes
+        if problematic_nodes:
+            warning_msg = f"Some nodes have issues: {', '.join(problematic_nodes[:3])}"
+            if len(problematic_nodes) > 3:
+                warning_msg += f" and {len(problematic_nodes) - 3} more"
+            
+                    return {
+            'nodes': nodes_list,
+            'states': states_dict
+        }, create_warning_notification(
+            warning_msg,
+            "Network Structure Issues"
+        )
+
+        # Success case - no notification needed
         return {
             'nodes': nodes_list,
             'states': states_dict
-        }
+        }, None
+        
     except Exception as e:
+        error_msg = str(e)
         logger.error(f"Error parsing network in parse_network_and_store_info: {e}")
-        return dash.no_update
+        
+        # Provide specific error messages
+        if "file not found" in error_msg.lower():
+            return dash.no_update, create_error_notification(
+                "Network file not found. Please re-upload your BIF file.",
+                "File Not Found"
+            )
+        elif "permission" in error_msg.lower():
+            return dash.no_update, create_error_notification(
+                "Permission denied accessing network file. Please try uploading again.",
+                "Access Error"
+            )
+        else:
+            return dash.no_update, create_error_notification(
+                f"Failed to parse network: {error_msg}",
+                "Parsing Error"
+            )
 
 
 # (D) Populate evidence checkbox container only if a model is available
@@ -835,13 +986,15 @@ def update_r_vars_options(evidence_checkbox_values, target_checkbox_values, mode
 # Main callback: run the chosen action
 @app.callback(
     Output('action-results', 'children'),
+    Output('notification-store', 'data', allow_duplicate=True),
     Input('run-action-button', 'n_clicks'),
     State('action-dropdown', 'value'),
     State('stored-network', 'data'),
     State({'type': 'evidence-value-dropdown', 'index': ALL}, 'value'),
     State({'type': 'evidence-value-dropdown', 'index': ALL}, 'id'),
     State({'type': 'target-checkbox', 'index': ALL}, 'value'),
-    State({'type': 'r-vars-checkbox', 'index': ALL}, 'value')
+    State({'type': 'r-vars-checkbox', 'index': ALL}, 'value'),
+    prevent_initial_call=True
 )
 def run_action(n_clicks, action, stored_network,
                evidence_values, evidence_ids,
@@ -849,10 +1002,14 @@ def run_action(n_clicks, action, stored_network,
     if not n_clicks:
         raise PreventUpdate
 
+    # Validate basic requirements
     if not stored_network:
-        return html.Div("No network loaded. Please upload or select the default network.", style={'color': 'red'})
+        return html.Div("No network loaded. Please upload or select the default network.", style={'color': 'red'}), create_error_notification(
+            "No network loaded. Please upload or select the default network.",
+            "Network Required"
+        )
 
-    # Build evidence dict
+    # Build evidence dict with validation
     evidence_dict = {}
     if evidence_values and evidence_ids:
         for ev_id, val in zip(evidence_ids, evidence_values):
@@ -872,7 +1029,58 @@ def run_action(n_clicks, action, stored_network,
         if checkbox_value:  # If checkbox is checked, it contains the variable name
             r_vars.extend(checkbox_value)
 
-    from probExplainer.model.BayesianNetwork import BayesianNetworkPyAgrum, ImplausibleEvidenceException
+    # Validate configuration based on action
+    if action == 'posterior':
+        if not target_vars:
+            return html.Div("Please select at least one target variable for Compute Posterior.", style={'color': 'red'}), create_error_notification(
+                "Please select at least one target variable for Compute Posterior.",
+                "Configuration Error"
+            )
+    elif action == 'map_independence':
+        if not target_vars:
+            return html.Div("Please select at least one target variable for Map Independence.", style={'color': 'red'}), create_error_notification(
+                "Please select at least one target variable for Map Independence.",
+                "Configuration Error"
+            )
+        if not r_vars:
+            return html.Div("Please select at least one variable in R for Map Independence.", style={'color': 'red'}), create_error_notification(
+                "Please select at least one variable in R for Map Independence.",
+                "Configuration Error"
+            )
+    elif action == 'defeaters':
+        if not target_vars:
+            return html.Div("Please select at least one target variable for Get Defeaters.", style={'color': 'red'}), create_error_notification(
+                "Please select at least one target variable for Get Defeaters.",
+                "Configuration Error"
+            )
+
+    # Check for variable overlap
+    overlap_evidence_targets = set(evidence_dict.keys()) & set(target_vars)
+    if overlap_evidence_targets:
+        overlap_vars = ', '.join(overlap_evidence_targets)
+        return html.Div(f"Variables cannot be both evidence and targets: {overlap_vars}", style={'color': 'red'}), create_error_notification(
+            f"Variables cannot be both evidence and targets: {overlap_vars}",
+            "Variable Overlap Error"
+        )
+
+    if action == 'map_independence':
+        overlap_evidence_r = set(evidence_dict.keys()) & set(r_vars)
+        overlap_targets_r = set(target_vars) & set(r_vars)
+        if overlap_evidence_r or overlap_targets_r:
+            overlap_vars = ', '.join(overlap_evidence_r | overlap_targets_r)
+            return html.Div(f"R variables cannot overlap with evidence or targets: {overlap_vars}", style={'color': 'red'}), create_error_notification(
+                f"R variables cannot overlap with evidence or targets: {overlap_vars}",
+                "Variable Overlap Error"
+            )
+
+    # Import and validate dependencies
+    try:
+        from probExplainer.model.BayesianNetwork import BayesianNetworkPyAgrum, ImplausibleEvidenceException
+    except ImportError as e:
+        return html.Div("ProbExplainer library not found. Please check installation.", style={'color': 'red'}), create_error_notification(
+            "ProbExplainer library not found. Please check installation.",
+            "Import Error"
+        )
 
     # Load BN with pyAgrum (without loadBNFromString)
     try:
@@ -881,109 +1089,194 @@ def run_action(n_clicks, action, stored_network,
         else:
             # if it's a string => use our helper
             bn_pya = loadBNfromMemory(stored_network['content'])
+    except FileNotFoundError:
+        return html.Div("Network file not found.", style={'color': 'red'}), create_error_notification(
+            "Network file not found. Please re-upload your BIF file.",
+            "File Not Found"
+        )
     except Exception as e:
-        return html.Div(f"Error loading network in pyAgrum: {e}", style={'color': 'red'})
+        return html.Div(f"Error loading network in pyAgrum: {e}", style={'color': 'red'}), create_error_notification(
+            f"Error loading network in pyAgrum: {str(e)}",
+            "Network Loading Error"
+        )
 
+    # Create adapter
     try:
         bn_adapter = BayesianNetworkPyAgrum(bn_pya)
     except Exception as e:
-        return html.Div(f"Error creating BayesianNetworkPyAgrum: {e}", style={'color': 'red'})
+        return html.Div(f"Error creating BayesianNetworkPyAgrum: {e}", style={'color': 'red'}), create_error_notification(
+            f"Error creating network adapter: {str(e)}",
+            "Adapter Error"
+        )
 
-    # Perform chosen action
-    if action == 'posterior':
-        if not target_vars:
-            return html.Div("Please select at least one target variable for Compute Posterior.", style={'color': 'red'})
-        try:
-            posterior_array = bn_adapter.compute_posterior(evidence_dict, target_vars)
-            domain = bn_adapter.get_domain_of(target_vars)
-            probs_list = posterior_array.flatten().tolist()
-            # Create a DataFrame for better display
-            df = pd.DataFrame({
-                'State': domain,
-                'Probability': [f"{p:.6f}" for p in probs_list]
-            })
-            table = dbc.Table.from_dataframe(df, bordered=True, striped=True, hover=True)
-            return dbc.Card(
-                dbc.CardBody([
-                    html.H4("Compute Posterior", className="card-title"),
-                    table
-                ]),
-                className="mt-3"
-            )
-
-        except ImplausibleEvidenceException:
-            return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
-        except Exception as e:
-            return html.Div(f"Error in compute_posterior: {e}", style={'color': 'red'})
-
-    elif action == 'map_independence':
-        if not target_vars:
-            return html.Div("Please select at least one target variable for Map Independence.", style={'color': 'red'})
-        if not r_vars:
-            return html.Div("Please select at least one variable in R for Map Independence.", style={'color': 'red'})
-
-        try:
-            map_result = bn_adapter.maximum_a_posteriori(evidence_dict, target_vars)
-            map_dict, map_prob = map_result[0], map_result[1]
-            independence_bool = bn_adapter.map_independence(r_vars, evidence_dict, map_dict)
-
-            if independence_bool:
-                return dbc.Alert(
-                    f"The MAP assignment {map_dict} is NOT altered by interventions on {r_vars} (INDEPENDENT).",
-                    color="success",
+    # Perform chosen action with comprehensive error handling
+    try:
+        if action == 'posterior':
+            logger.info(f"Computing posterior for targets: {target_vars}, evidence: {evidence_dict}")
+            
+            # Validate evidence values exist in network
+            invalid_evidence = []
+            for var, val in evidence_dict.items():
+                if var in bn_pya.names():
+                    possible_states = [str(s) for s in bn_pya.variable(bn_pya.idFromName(var)).labels()]
+                    if str(val) not in possible_states:
+                        invalid_evidence.append(f"{var}={val} (valid: {possible_states})")
+                else:
+                    invalid_evidence.append(f"{var} (variable not found)")
+                    
+            if invalid_evidence:
+                error_msg = f"Invalid evidence values: {', '.join(invalid_evidence[:2])}"
+                if len(invalid_evidence) > 2:
+                    error_msg += f" and {len(invalid_evidence) - 2} more"
+                return html.Div(error_msg, style={'color': 'red'}), create_error_notification(
+                    error_msg,
+                    "Invalid Evidence"
+                )
+            
+            try:
+                posterior_array = bn_adapter.compute_posterior(evidence_dict, target_vars)
+                domain = bn_adapter.get_domain_of(target_vars)
+                probs_list = posterior_array.flatten().tolist()
+                
+                # Validate results
+                if not probs_list or all(p == 0 for p in probs_list):
+                    return html.Div("All probabilities are zero. Check your evidence values.", style={'color': 'red'}), create_warning_notification(
+                        "All probabilities are zero. This might indicate impossible evidence.",
+                        "Suspicious Results"
+                    )
+                
+                # Create a DataFrame for better display
+                df = pd.DataFrame({
+                    'State': domain,
+                    'Probability': [f"{p:.6f}" for p in probs_list]
+                })
+                table = dbc.Table.from_dataframe(df, bordered=True, striped=True, hover=True)
+                
+                result = dbc.Card(
+                    dbc.CardBody([
+                        html.H4("Compute Posterior", className="card-title"),
+                        table
+                    ]),
                     className="mt-3"
                 )
-            else:
-                return dbc.Alert(
-                    f"The MAP assignment {map_dict} IS altered by {r_vars} (DEPENDENT).",
-                    color="primary",
+                
+                return result, None
+
+            except ImplausibleEvidenceException:
+                return html.Div("Impossible Evidence: The specified evidence combination is not possible in this network.", style={'color': 'red'}), create_error_notification(
+                    "The specified evidence combination is impossible in this network. Please check your evidence values.",
+                    "Impossible Evidence"
+                )
+
+        elif action == 'map_independence':
+            logger.info(f"Computing MAP independence for targets: {target_vars}, evidence: {evidence_dict}, R: {r_vars}")
+            
+            try:
+                map_result = bn_adapter.maximum_a_posteriori(evidence_dict, target_vars)
+                map_dict, map_prob = map_result[0], map_result[1]
+                
+                # Validate MAP result
+                if not map_dict:
+                    return html.Div("No MAP assignment found.", style={'color': 'red'}), create_error_notification(
+                        "No MAP assignment could be computed. Check your configuration.",
+                        "MAP Computation Error"
+                    )
+                
+                independence_bool = bn_adapter.map_independence(r_vars, evidence_dict, map_dict)
+
+                if independence_bool:
+                    result = dbc.Alert(
+                        f"The MAP assignment {map_dict} is NOT altered by interventions on {r_vars} (INDEPENDENT).",
+                        color="success",
+                        className="mt-3"
+                    )
+                else:
+                    result = dbc.Alert(
+                        f"The MAP assignment {map_dict} IS altered by {r_vars} (DEPENDENT).",
+                        color="primary",
+                        className="mt-3"
+                    )
+                
+                return result, None
+                
+            except ImplausibleEvidenceException:
+                return html.Div("Impossible Evidence: The specified evidence combination is not possible in this network.", style={'color': 'red'}), create_error_notification(
+                    "The specified evidence combination is impossible in this network.",
+                    "Impossible Evidence"
+                )
+
+        elif action == 'defeaters':
+            logger.info(f"Computing defeaters for targets: {target_vars}, evidence: {evidence_dict}")
+            
+            try:
+                from probExplainer.algorithms.defeater import get_defeaters
+                
+                relevant_sets, irrelevant_sets = get_defeaters(
+                    model=bn_adapter,
+                    evidence=evidence_dict,
+                    target=target_vars,
+                    depth=float('inf'),
+                    evaluate_singletons=True
+                )
+                
+                # Validate results
+                total_sets = len(relevant_sets) + len(irrelevant_sets)
+                
+                result = dbc.Card(
+                    dbc.CardBody([
+                        html.H4("Get Defeaters Results", className="card-title"),
+                        html.H5("Relevant sets:", className="mt-3"),
+                        html.Ul([html.Li(str(s)) for s in relevant_sets]) if relevant_sets else html.P("None"),
+                        html.H5("Irrelevant sets:", className="mt-3"),
+                        html.Ul([html.Li(str(s)) for s in irrelevant_sets]) if irrelevant_sets else html.P("None"),
+                    ]),
                     className="mt-3"
                 )
-        except ImplausibleEvidenceException:
-            return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
-        except Exception as e:
-            return html.Div(f"Error in map_independence: {e}", style={'color': 'red'})
+                
+                return result, None
 
-    elif action == 'defeaters':
-        if not target_vars:
-            return html.Div("Please select at least one target variable for Get Defeaters.", style={'color': 'red'})
+            except ImplausibleEvidenceException:
+                return html.Div("Impossible Evidence: The specified evidence combination is not possible in this network.", style={'color': 'red'}), create_error_notification(
+                    "The specified evidence combination is impossible in this network.",
+                    "Impossible Evidence"
+                )
+            except ImportError:
+                return html.Div("Defeaters algorithm not available. Please check ProbExplainer installation.", style={'color': 'red'}), create_error_notification(
+                    "Defeaters algorithm not available. Please check ProbExplainer installation.",
+                    "Algorithm Not Available"
+                )
 
-        from probExplainer.algorithms.defeater import get_defeaters
-        try:
-            relevant_sets, irrelevant_sets = get_defeaters(
-                model=bn_adapter,
-                evidence=evidence_dict,
-                target=target_vars,
-                depth=float('inf'),
-                evaluate_singletons=True
-            )
-            if not relevant_sets:
-                relevant_str = "None"
-            else:
-                relevant_str = "\n".join(map(str, relevant_sets))
-            if not irrelevant_sets:
-                irrelevant_str = "None"
-            else:
-                irrelevant_str = "\n".join(map(str, irrelevant_sets))
-
-            return dbc.Card(
-                dbc.CardBody([
-                    html.H4("Get Defeaters Results", className="card-title"),
-                    html.H5("Relevant sets:", className="mt-3"),
-                    html.Ul([html.Li(str(s)) for s in relevant_sets]) or html.P("None"),
-                    html.H5("Irrelevant sets:", className="mt-3"),
-                    html.Ul([html.Li(str(s)) for s in irrelevant_sets]) or html.P("None"),
-                ]),
-                className="mt-3"
+        else:
+            return html.Div("Unknown action selected.", style={'color': 'red'}), create_error_notification(
+                f"Unknown action: {action}",
+                "Invalid Action"
             )
 
-        except ImplausibleEvidenceException:
-            return html.Div("Impossible Evidence (ImplausibleEvidenceException).", style={'color': 'red'})
-        except Exception as e:
-            return html.Div(f"Error in get_defeaters: {e}", style={'color': 'red'})
-
-    else:
-        return html.Div("Unknown action.", style={'color': 'red'})
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Error in {action}: {e}")
+        
+        # Provide specific error handling for common issues
+        if "memory" in error_msg.lower() or "out of memory" in error_msg.lower():
+            return html.Div("Out of memory. Try with a smaller network or fewer variables.", style={'color': 'red'}), create_error_notification(
+                "Computation failed due to memory constraints. Try with fewer variables or a smaller network.",
+                "Memory Error"
+            )
+        elif "timeout" in error_msg.lower():
+            return html.Div("Computation timed out. Try with simpler parameters.", style={'color': 'red'}), create_error_notification(
+                "Computation timed out. Try with simpler parameters or a smaller network.",
+                "Timeout Error"
+            )
+        elif "convergence" in error_msg.lower():
+            return html.Div("Algorithm did not converge. Results may be unreliable.", style={'color': 'red'}), create_error_notification(
+                "Algorithm did not converge properly. Results may be unreliable.",
+                "Convergence Error"
+            )
+        else:
+            return html.Div(f"Error in {action}: {error_msg}", style={'color': 'red'}), create_error_notification(
+                f"Error in {action}: {error_msg}",
+                "Computation Error"
+            )
 
 # Callbacks for evidence selection buttons
 @app.callback(
@@ -1087,6 +1380,72 @@ def toggle_r_vars_popover(n, is_open):
     if n:
         return not is_open
     return is_open
+
+# Notification system callback
+@app.callback(
+    [Output('notification-container', 'children'),
+     Output('notification-container', 'style')],
+    Input('notification-store', 'data')
+)
+def show_notification(data):
+    """Display notifications with Bootstrap toasts and animations"""
+    if data is None:
+        return None, {
+            'position': 'fixed',
+            'bottom': '20px',
+            'right': '20px',
+            'zIndex': '1000',
+            'width': '300px',
+            'transition': 'all 0.3s ease-in-out',
+            'transform': 'translateY(100%)',
+            'opacity': '0'
+        }
+    
+    # Create toast with animation
+    toast = dbc.Toast(
+        data['message'],
+        header=data['header'],
+        icon=data['icon'],
+        is_open=True,
+        dismissable=True,
+        style={
+            'width': '100%',
+            'boxShadow': '0 4px 6px rgba(0, 0, 0, 0.1)',
+            'borderRadius': '8px',
+            'marginBottom': '10px'
+        }
+    )
+    
+    # Style to show notification with animation
+    container_style = {
+        'position': 'fixed',
+        'bottom': '20px',
+        'right': '20px',
+        'zIndex': '1000',
+        'width': '300px',
+        'transition': 'all 0.3s ease-in-out',
+        'transform': 'translateY(0)',
+        'opacity': '1'
+    }
+    
+    return toast, container_style
+
+# Helper functions for creating notifications
+def create_error_notification(message, header="Error"):
+    """Create error notification data"""
+    return {
+        'message': message,
+        'header': header,
+        'icon': 'danger'
+    }
+
+def create_warning_notification(message, header="Warning"):
+    """Create warning notification data"""
+    return {
+        'message': message,
+        'header': header,
+        'icon': 'warning'
+    }
 
 # ---------- (5) RUN THE SERVER ---------- #
 if __name__ == '__main__':
