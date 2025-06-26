@@ -11,12 +11,38 @@ from pgmpy.readwrite import BIFReader
 
 import pyAgrum as gum
 import os
+import sys
 import tempfile
+
+# Add parent directory to sys.path to resolve imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
+
+# Import session management components (absolute imports)
+try:
+    from dash_session_manager import start_session_manager, get_session_manager
+    from dash_session_components import create_session_components, setup_session_callbacks, register_long_running_process
+    SESSION_MANAGEMENT_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Session management not available: {e}")
+    SESSION_MANAGEMENT_AVAILABLE = False
+    # Define dummy functions to prevent errors
+    def start_session_manager(): pass
+    def get_session_manager(): return None
+    def create_session_components(): return None, html.Div()
+    def setup_session_callbacks(app): pass
+    def register_long_running_process(session_id): pass
 
 warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Start the global session manager
+if SESSION_MANAGEMENT_AVAILABLE:
+    start_session_manager()
 
 # ---------- (1) CREATE DASH APP ---------- #
 app = dash.Dash(
@@ -30,6 +56,79 @@ app = dash.Dash(
 )
 
 server = app.server
+
+# Create session components - but use dynamic session creation
+if SESSION_MANAGEMENT_AVAILABLE:
+    # Don't create session here - will be created dynamically per user
+    session_components = html.Div([
+        # Dynamic session store - will be populated by callback
+        dcc.Store(id='session-id-store', data=None),
+        dcc.Store(id='heartbeat-counter', data=0),
+        
+        # Interval component for heartbeat (every 5 seconds)
+        dcc.Interval(
+            id='heartbeat-interval',
+            interval=5*1000,  # 5 seconds
+            n_intervals=0,
+            disabled=False
+        ),
+        
+        # Interval for cleanup check (every 30 seconds)
+        dcc.Interval(
+            id='cleanup-interval', 
+            interval=30*1000,  # 30 seconds
+            n_intervals=0,
+            disabled=False
+        ),
+        
+        # Hidden div for status
+        html.Div(id='session-status', style={'display': 'none'}),
+        
+        # Client-side script for session management
+        html.Script("""
+            // Generate unique session ID per browser
+            if (!window.dashSessionId) {
+                window.dashSessionId = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            }
+            
+            // Send heartbeat on page activity
+            document.addEventListener('click', function() {
+                if (window.dashHeartbeat) window.dashHeartbeat();
+            });
+            
+            document.addEventListener('keypress', function() {
+                if (window.dashHeartbeat) window.dashHeartbeat();
+            });
+            
+            // Handle page unload
+            window.addEventListener('beforeunload', function() {
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon('/dash/_disconnect', JSON.stringify({
+                        session_id: window.dashSessionId
+                    }));
+                }
+            });
+            
+            // Handle iframe unload (when parent page changes)
+            if (window.parent !== window) {
+                try {
+                    window.parent.addEventListener('beforeunload', function() {
+                        if (navigator.sendBeacon) {
+                            navigator.sendBeacon('/dash/_disconnect', JSON.stringify({
+                                session_id: window.dashSessionId
+                            }));
+                        }
+                    });
+                } catch(e) {
+                    console.log('Cross-origin iframe detected');
+                }
+            }
+        """),
+    ], style={'display': 'none'})
+    session_id = None  # Will be set dynamically
+else:
+    session_id = None
+    session_components = html.Div()
 
 
 # ---------- (2) HELPER FUNCTION FOR pyAgrum PARSING FROM STRING ---------- #
@@ -51,6 +150,9 @@ def loadBNfromMemory(bif_string):
 
 # ---------- (3) APP LAYOUT ---------- #
 app.layout = html.Div([
+    # SESSION MANAGEMENT COMPONENTS - ADD THESE TO ALL DASH APPS
+    session_components,
+    
     dcc.Loading(
         id="global-spinner",
         type="default",
@@ -994,13 +1096,19 @@ def update_r_vars_options(evidence_checkbox_values, target_checkbox_values, mode
     State({'type': 'evidence-value-dropdown', 'index': ALL}, 'id'),
     State({'type': 'target-checkbox', 'index': ALL}, 'value'),
     State({'type': 'r-vars-checkbox', 'index': ALL}, 'value'),
+    State('session-id-store', 'data'),
     prevent_initial_call=True
 )
 def run_action(n_clicks, action, stored_network,
                evidence_values, evidence_ids,
-               target_checkbox_values, r_vars_checkbox_values):
+               target_checkbox_values, r_vars_checkbox_values, session_id):
     if not n_clicks:
         raise PreventUpdate
+    
+    # REGISTER THIS PROCESS WITH SESSION MANAGER (CRITICAL FOR CLEANUP)
+    if SESSION_MANAGEMENT_AVAILABLE and session_id:
+        register_long_running_process(session_id)
+        logger.info(f"Registered ProbExplainer analysis process for session {session_id}")
 
     # Validate basic requirements
     if not stored_network:
@@ -1446,6 +1554,58 @@ def create_warning_notification(message, header="Warning"):
         'header': header,
         'icon': 'warning'
     }
+
+# Setup session management callbacks
+if SESSION_MANAGEMENT_AVAILABLE:
+    @app.callback(
+        Output('session-id-store', 'data'),
+        Input('heartbeat-interval', 'n_intervals'),
+        State('session-id-store', 'data'),
+        prevent_initial_call=False
+    )
+    def initialize_session(n_intervals, stored_session_id):
+        """Initialize session ID dynamically for each user."""
+        if stored_session_id is None:
+            # Create new session for this user
+            session_manager = get_session_manager()
+            new_session_id = session_manager.register_session()
+            session_manager.register_process(new_session_id, os.getpid())
+            logger.info(f"New PROBEXPLAINER session created: {new_session_id}")
+            return new_session_id
+        return stored_session_id
+    
+    @app.callback(
+        Output('session-status', 'children'),
+        Input('heartbeat-interval', 'n_intervals'),
+        State('session-id-store', 'data'),
+        prevent_initial_call=True
+    )
+    def send_heartbeat(n_intervals, session_id):
+        """Send heartbeat to session manager."""
+        if session_id:
+            session_manager = get_session_manager()
+            session_manager.heartbeat(session_id)
+            if n_intervals % 12 == 0:  # Log every minute (every 12 intervals of 5s)
+                logger.info(f"PROBEXPLAINER heartbeat sent for session: {session_id}")
+            return f"Heartbeat sent: {n_intervals}"
+        return "No session"
+    
+    @app.callback(
+        Output('heartbeat-counter', 'data'),
+        Input('cleanup-interval', 'n_intervals'),
+        State('session-id-store', 'data'),
+        prevent_initial_call=True
+    )
+    def periodic_cleanup_check(n_intervals, session_id):
+        """Periodic check to ensure session is still active."""
+        if session_id:
+            session_manager = get_session_manager()
+            active_sessions = session_manager.get_active_sessions()
+            if session_id not in active_sessions:
+                # Session expired, try to refresh or handle gracefully
+                logger.warning(f"PROBEXPLAINER session {session_id} expired")
+                return n_intervals
+        return n_intervals
 
 # ---------- (5) RUN THE SERVER ---------- #
 if __name__ == '__main__':
