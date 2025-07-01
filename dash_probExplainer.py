@@ -644,7 +644,24 @@ app.layout = html.Div([
 
 # ---------- (4) CALLBACKS ---------- #
 
-# (B) Store the chosen network (default or uploaded) in 'stored-network'
+# (B) Clear default checkbox when file is uploaded
+@app.callback(
+    Output('use-default-network', 'value'),
+    Input('upload-data', 'contents'),
+    State('use-default-network', 'value'),
+    prevent_initial_call=True
+)
+def clear_default_on_upload(contents, current_value):
+    """
+    Clear the 'Use default dataset' checkbox when a file is uploaded.
+    This prevents confusion about which dataset is being used.
+    """
+    if contents is not None:
+        logger.info("File uploaded, clearing default dataset checkbox")
+        return []  # Clear the checkbox
+    raise PreventUpdate
+
+# (C) Store the chosen network (default or uploaded) in 'stored-network'
 @app.callback(
     Output('stored-network', 'data'),
     Output('notification-store', 'data'),
