@@ -275,16 +275,28 @@ app.layout = html.Div([
             # Section to select action
             html.Div(className="card", children=[
                 html.H3("2. Select an Action to Perform", style={'textAlign': 'center'}),
-                dcc.Dropdown(
-                    id='action-dropdown',
-                    options=[
-                        {'label': 'Compute Posterior', 'value': 'posterior'},
-                        {'label': 'Map Independence', 'value': 'map_independence'},
-                        {'label': 'Get Defeaters', 'value': 'defeaters'}
-                    ],
-                    value='posterior',  # Default action
-                    style={'width': '50%', 'margin': '0 auto'}
-                )
+                html.Div([
+                    dbc.Select(
+                        id='action-dropdown',
+                        options=[
+                            {'label': 'Compute Posterior', 'value': 'posterior'},
+                            {'label': 'Map Independence', 'value': 'map_independence'},
+                            {'label': 'Get Defeaters', 'value': 'defeaters'}
+                        ],
+                        value='posterior',  # Default action
+                        style={
+                            'width': '100%',
+                            'border': '1px solid #d0d7de',
+                            'borderRadius': '6px',
+                            'padding': '8px 12px',
+                            'backgroundColor': 'rgba(255, 255, 255, 0.8)',
+                            'backdropFilter': 'blur(10px)',
+                            'boxShadow': '0 1px 3px rgba(0, 0, 0, 0.1)',
+                            'transition': 'all 0.2s ease',
+                            'fontSize': '14px'
+                        }
+                    )
+                ], style={'width': '300px', 'margin': '0 auto'})
             ]),
 
             # Evidence selection
@@ -1027,11 +1039,21 @@ def update_evidence_values(checkbox_values, model_info):
                                 f"Select value for {var}",
                                 style={'width': '40%', 'textAlign': 'right', 'paddingRight': '10px'}
                             ),
-                            dcc.Dropdown(
+                            dbc.Select(
                                 id={'type': 'evidence-value-dropdown', 'index': var},
                                 options=[{'label': s, 'value': s} for s in var_states],
                                 value=var_states[0] if var_states else None,
-                                style={'width': '60%'}
+                                style={
+                                    'width': '60%',
+                                    'border': '1px solid #d0d7de',
+                                    'borderRadius': '6px',
+                                    'padding': '8px 12px',
+                                    'backgroundColor': 'rgba(255, 255, 255, 0.8)',
+                                    'backdropFilter': 'blur(10px)',
+                                    'boxShadow': '0 1px 3px rgba(0, 0, 0, 0.1)',
+                                    'transition': 'all 0.2s ease',
+                                    'fontSize': '14px'
+                                }
                             )
                         ],
                         style={'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center'}
