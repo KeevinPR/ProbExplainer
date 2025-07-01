@@ -644,30 +644,11 @@ app.layout = html.Div([
 
 # ---------- (4) CALLBACKS ---------- #
 
-# (A) Checking the "Use default" => clear uploaded file contents and let main callback handle default
-@app.callback(
-    Output('upload-data', 'contents'),
-    Input('use-default-network', 'value'),
-    prevent_initial_call=True
-)
-def clear_upload_when_default_selected(value):
-    """
-    When default is selected, clear any uploaded file to avoid conflicts.
-    The main load_network callback will handle the default loading logic.
-    """
-    if 'default' in value:
-        # Clear the upload contents so default takes precedence
-        logger.info("Default selected, clearing uploaded file")
-        return None
-    return dash.no_update
-
-
 # (B) Store the chosen network (default or uploaded) in 'stored-network'
 @app.callback(
     Output('stored-network', 'data'),
     Output('notification-store', 'data'),
     Output('dataset-change-detector', 'data'),
-    Output('use-default-network', 'value'),
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
     Input('use-default-network', 'value')
@@ -675,10 +656,10 @@ def clear_upload_when_default_selected(value):
 def load_network(contents, filename, default_value):
     """
     Store path/string in 'stored-network' and provide user feedback via notifications.
-    Also manages dataset change detection and checkbox state.
+    Also manages dataset change detection.
     
     - If 'default' is in default_value => use the known path to network_5.bif (or your default).
-    - If user uploads => decode the BIF string and uncheck default.
+    - If user uploads => decode the BIF string.
     - If nothing => PreventUpdate.
     """
     import time
@@ -695,7 +676,7 @@ def load_network(contents, filename, default_value):
             return dash.no_update, create_warning_notification(
                 "Please upload a .bif file. Other formats are not supported.",
                 "Invalid File Format"
-            ), dash.no_update, default_value
+            ), dash.no_update
         
         try:
             content_type, content_string = contents.split(',')
@@ -711,7 +692,7 @@ def load_network(contents, filename, default_value):
                 return dash.no_update, create_error_notification(
                     "The uploaded network has no nodes. Please check your BIF file.",
                     "Empty Network"
-                ), dash.no_update, default_value
+                ), dash.no_update
                 
             node_count = len(model.nodes())
             if node_count > 100:
@@ -724,8 +705,7 @@ def load_network(contents, filename, default_value):
                     f"Large network detected ({node_count} nodes). Performance may be affected.",
                     "Large Network"
                 )
-                # Clear default checkbox when file is uploaded
-                return network_data, notification, change_id, []
+                return network_data, notification, change_id
             
             logger.info(f"Valid network uploaded: {filename} with {node_count} nodes")
             network_data = {
@@ -733,15 +713,14 @@ def load_network(contents, filename, default_value):
                 'network_type': 'string',
                 'content': bif_data
             }
-            # Clear default checkbox when file is uploaded successfully
-            return network_data, None, change_id, []
+            return network_data, None, change_id
             
         except UnicodeDecodeError:
             logger.error(f"Error decoding file: {filename}")
             return dash.no_update, create_error_notification(
                 "Unable to decode the file. Please ensure it's a valid text-based BIF file.",
                 "File Encoding Error"
-            ), dash.no_update, default_value
+            ), dash.no_update
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Error loading network: {e}")
@@ -767,7 +746,7 @@ def load_network(contents, filename, default_value):
                     f"Error loading network: {error_msg}",
                     "Network Loading Error"
                 )
-            return dash.no_update, notification, dash.no_update, default_value
+            return dash.no_update, notification, dash.no_update
 
     # Priority 2: Handle default checkbox (only if no file was uploaded)
     elif 'default' in default_value:
@@ -787,20 +766,19 @@ def load_network(contents, filename, default_value):
                 'network_type': 'path',
                 'content': default_path
             }
-            # Keep default checkbox checked
-            return network_data, None, change_id, default_value
+            return network_data, None, change_id
         except FileNotFoundError:
             logger.error("Default network file not found")
             return dash.no_update, create_error_notification(
                 "Default network file not found. Please upload your own BIF file.",
                 "File Not Found"
-            ), dash.no_update, default_value
+            ), dash.no_update
         except Exception as e:
             logger.error(f"Error loading default network: {e}")
             return dash.no_update, create_error_notification(
                 f"Error loading default network: {str(e)}",
                 "Invalid Default Network"
-            ), dash.no_update, default_value
+            ), dash.no_update
 
     # If neither default is checked nor any file is uploaded => do nothing
     raise PreventUpdate
