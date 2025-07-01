@@ -477,6 +477,12 @@ app.layout = html.Div([
             dcc.Store(id='previous-target-selection', data=[]),
             dcc.Store(id='previous-r-selection', data=[]),
             
+            # Store to detect dataset changes and trigger reset
+            dcc.Store(id='dataset-change-detector', data=None),
+            
+            # Store for tracking clean state
+            dcc.Store(id='app-clean-state', data=True),
+            
             # Notification system
             dcc.Store(id='notification-store'),
         ])
@@ -626,29 +632,21 @@ app.layout = html.Div([
 
 # ---------- (4) CALLBACKS ---------- #
 
-# (A) Checking the "Use default" => set 'upload-data.contents'
+# (A) Checking the "Use default" => clear uploaded file contents and let main callback handle default
 @app.callback(
     Output('upload-data', 'contents'),
     Input('use-default-network', 'value'),
     prevent_initial_call=True
 )
-def use_default_dataset(value):
+def clear_upload_when_default_selected(value):
     """
-    If 'default' is checked, read your local 'carwithnames.data' (or a default .bif) file,
-    encode as base64, set upload-data.contents, triggering parse callback.
-    
-    NOTE: If 'carwithnames.data' is NOT a BIF, parsing will fail.
+    When default is selected, clear any uploaded file to avoid conflicts.
+    The main load_network callback will handle the default loading logic.
     """
     if 'default' in value:
-        default_file = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/Counterfactuals/carwithnames.data'
-        try:
-            with open(default_file, 'rb') as f:
-                raw = f.read()
-            b64 = base64.b64encode(raw).decode()
-            return f"data:text/csv;base64,{b64}"
-        except Exception as e:
-            print(f"Error reading default dataset: {e}")
-            return dash.no_update
+        # Clear the upload contents so default takes precedence
+        logger.info("Default selected, clearing uploaded file")
+        return None
     return dash.no_update
 
 
@@ -656,6 +654,8 @@ def use_default_dataset(value):
 @app.callback(
     Output('stored-network', 'data'),
     Output('notification-store', 'data'),
+    Output('dataset-change-detector', 'data'),
+    Output('use-default-network', 'value'),
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
     Input('use-default-network', 'value')
@@ -663,47 +663,18 @@ def use_default_dataset(value):
 def load_network(contents, filename, default_value):
     """
     Store path/string in 'stored-network' and provide user feedback via notifications.
+    Also manages dataset change detection and checkbox state.
     
     - If 'default' is in default_value => use the known path to network_5.bif (or your default).
-    - If user uploads => decode the BIF string.
+    - If user uploads => decode the BIF string and uncheck default.
     - If nothing => PreventUpdate.
     """
-    # If neither default is checked nor any file is uploaded => do nothing
-    if (not contents) and ('default' not in default_value):
-        raise PreventUpdate
-
-    # If "Use default" is checked => always override with that
-    if 'default' in default_value:
-        try:
-            # Check if default file exists and is valid
-            default_path = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif'
-            
-            # Validate default file
-            with open(default_path, 'r') as f:
-                default_data = f.read()
-            test_reader = BIFReader(string=default_data)
-            _ = test_reader.get_model()  # Validate structure
-            
-            logger.info("Using default network: network_5.bif")
-            return {
-                'network_name': 'network_5.bif',
-                'network_type': 'path',
-                'content': default_path
-            }, None
-        except FileNotFoundError:
-            logger.error("Default network file not found")
-            return dash.no_update, create_error_notification(
-                "Default network file not found. Please upload your own BIF file.",
-                "File Not Found"
-            )
-        except Exception as e:
-            logger.error(f"Error loading default network: {e}")
-            return dash.no_update, create_error_notification(
-                f"Error loading default network: {str(e)}",
-                "Invalid Default Network"
-            )
-
-    # Otherwise, if user uploaded something:
+    import time
+    
+    # Generate unique change ID for dataset change detection
+    change_id = str(time.time())
+    
+    # Priority 1: Handle file upload (takes precedence over default)
     if contents:
         logger.info(f"Attempting to load uploaded network: {filename}")
         
@@ -712,7 +683,7 @@ def load_network(contents, filename, default_value):
             return dash.no_update, create_warning_notification(
                 "Please upload a .bif file. Other formats are not supported.",
                 "Invalid File Format"
-            )
+            ), dash.no_update, default_value
         
         try:
             content_type, content_string = contents.split(',')
@@ -728,58 +699,175 @@ def load_network(contents, filename, default_value):
                 return dash.no_update, create_error_notification(
                     "The uploaded network has no nodes. Please check your BIF file.",
                     "Empty Network"
-                )
+                ), dash.no_update, default_value
                 
             node_count = len(model.nodes())
             if node_count > 100:
-                return {
+                network_data = {
                     'network_name': filename,
                     'network_type': 'string',
                     'content': bif_data
-                }, create_warning_notification(
+                }
+                notification = create_warning_notification(
                     f"Large network detected ({node_count} nodes). Performance may be affected.",
                     "Large Network"
                 )
+                # Clear default checkbox when file is uploaded
+                return network_data, notification, change_id, []
             
             logger.info(f"Valid network uploaded: {filename} with {node_count} nodes")
-            return {
+            network_data = {
                 'network_name': filename,
                 'network_type': 'string',
                 'content': bif_data
-            }, None
+            }
+            # Clear default checkbox when file is uploaded successfully
+            return network_data, None, change_id, []
             
         except UnicodeDecodeError:
             logger.error(f"Error decoding file: {filename}")
             return dash.no_update, create_error_notification(
                 "Unable to decode the file. Please ensure it's a valid text-based BIF file.",
                 "File Encoding Error"
-            )
+            ), dash.no_update, default_value
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Error loading network: {e}")
             
             # Provide specific error messages for common issues
             if "variable" in error_msg.lower() and "not found" in error_msg.lower():
-                return dash.no_update, create_error_notification(
+                notification = create_error_notification(
                     "Network contains undefined variables. Please check your BIF file structure.",
                     "Invalid Network Structure"
                 )
             elif "probability" in error_msg.lower():
-                return dash.no_update, create_error_notification(
+                notification = create_error_notification(
                     "Network contains invalid probability values. Please verify your CPTs.",
                     "Invalid Probabilities"
                 )
             elif "parse" in error_msg.lower() or "syntax" in error_msg.lower():
-                return dash.no_update, create_error_notification(
+                notification = create_error_notification(
                     "BIF file has syntax errors. Please check the file format.",
                     "Syntax Error"
                 )
             else:
-                return dash.no_update, create_error_notification(
+                notification = create_error_notification(
                     f"Error loading network: {error_msg}",
                     "Network Loading Error"
                 )
+            return dash.no_update, notification, dash.no_update, default_value
 
+    # Priority 2: Handle default checkbox (only if no file was uploaded)
+    elif 'default' in default_value:
+        try:
+            # Check if default file exists and is valid
+            default_path = '/var/www/html/CIGModels/backend/cigmodelsdjango/cigmodelsdjangoapp/ProbExplainer/expert_networks/network_5.bif'
+            
+            # Validate default file
+            with open(default_path, 'r') as f:
+                default_data = f.read()
+            test_reader = BIFReader(string=default_data)
+            _ = test_reader.get_model()  # Validate structure
+            
+            logger.info("Using default network: network_5.bif")
+            network_data = {
+                'network_name': 'network_5.bif',
+                'network_type': 'path',
+                'content': default_path
+            }
+            # Keep default checkbox checked
+            return network_data, None, change_id, default_value
+        except FileNotFoundError:
+            logger.error("Default network file not found")
+            return dash.no_update, create_error_notification(
+                "Default network file not found. Please upload your own BIF file.",
+                "File Not Found"
+            ), dash.no_update, default_value
+        except Exception as e:
+            logger.error(f"Error loading default network: {e}")
+            return dash.no_update, create_error_notification(
+                f"Error loading default network: {str(e)}",
+                "Invalid Default Network"
+            ), dash.no_update, default_value
+
+    # If neither default is checked nor any file is uploaded => do nothing
+    raise PreventUpdate
+
+
+# (B.5) Reset app state when dataset changes
+@app.callback(
+    Output('action-results', 'children', allow_duplicate=True),
+    Output('app-clean-state', 'data'),
+    Output('previous-evidence-selection', 'data', allow_duplicate=True),
+    Output('previous-target-selection', 'data', allow_duplicate=True), 
+    Output('previous-r-selection', 'data', allow_duplicate=True),
+    Output('notification-store', 'data', allow_duplicate=True),
+    Input('dataset-change-detector', 'data'),
+    prevent_initial_call=True
+)
+def reset_app_state_on_dataset_change(change_id):
+    """
+    Reset app to clean state when dataset changes.
+    This clears previous results and selections to avoid confusion.
+    """
+    if change_id is not None:
+        logger.info(f"Dataset changed (ID: {change_id}), resetting app state")
+        
+        # Create notification to inform user of reset
+        notification = create_info_notification(
+            "Application state has been reset due to dataset change. Previous selections and results have been cleared.",
+            "State Reset"
+        )
+        
+        return (
+            html.Div(),  # Clear action results
+            True,        # Mark app as clean
+            [],          # Clear previous evidence selection
+            [],          # Clear previous target selection
+            [],          # Clear previous R selection
+            notification # Notify user of reset
+        )
+    raise PreventUpdate
+
+
+# (B.6) Clear checkboxes when dataset changes
+@app.callback(
+    Output({'type': 'evidence-checkbox', 'index': ALL}, 'value', allow_duplicate=True),
+    Output({'type': 'target-checkbox', 'index': ALL}, 'value', allow_duplicate=True),
+    Output({'type': 'r-vars-checkbox', 'index': ALL}, 'value', allow_duplicate=True),
+    Input('dataset-change-detector', 'data'),
+    State({'type': 'evidence-checkbox', 'index': ALL}, 'id'),
+    State({'type': 'target-checkbox', 'index': ALL}, 'id'),
+    State({'type': 'r-vars-checkbox', 'index': ALL}, 'id'),
+    prevent_initial_call=True
+)
+def clear_checkboxes_on_dataset_change(change_id, evidence_ids, target_ids, r_vars_ids):
+    """
+    Clear all checkbox selections when dataset changes to start fresh.
+    """
+    if change_id is not None:
+        logger.info("Clearing all checkbox selections due to dataset change")
+        # Return empty lists for all checkboxes to clear them
+        evidence_clear = [[] for _ in evidence_ids]
+        target_clear = [[] for _ in target_ids] 
+        r_vars_clear = [[] for _ in r_vars_ids]
+        return evidence_clear, target_clear, r_vars_clear
+    raise PreventUpdate
+
+
+# (B.7) Clear evidence values container when dataset changes
+@app.callback(
+    Output('evidence-values-container', 'children', allow_duplicate=True),
+    Input('dataset-change-detector', 'data'),
+    prevent_initial_call=True
+)
+def clear_evidence_values_on_dataset_change(change_id):
+    """
+    Clear evidence values dropdowns when dataset changes.
+    """
+    if change_id is not None:
+        logger.info("Clearing evidence values container due to dataset change")
+        return []
     raise PreventUpdate
 
 
@@ -1553,6 +1641,14 @@ def create_warning_notification(message, header="Warning"):
         'message': message,
         'header': header,
         'icon': 'warning'
+    }
+
+def create_info_notification(message, header="Info"):
+    """Create info notification data"""
+    return {
+        'message': message,
+        'header': header,
+        'icon': 'info'
     }
 
 # Setup session management callbacks
